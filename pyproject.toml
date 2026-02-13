@@ -1,0 +1,14 @@
+[project]
+name = "smart-parcel-tracker-backend"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+testpaths = ["tests"]
+addopts = "-q"
