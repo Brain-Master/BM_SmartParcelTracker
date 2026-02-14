@@ -44,8 +44,13 @@ async def create_order(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create a new order."""
-    order = await order_service.create_order(db, current_user.id, order_data)
+    """Create a new order with automatic currency conversion."""
+    order = await order_service.create_order(
+        db, 
+        current_user.id, 
+        order_data,
+        user_main_currency=current_user.main_currency
+    )
     return order
 
 

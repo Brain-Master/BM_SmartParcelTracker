@@ -109,3 +109,23 @@ def test_parcel_data():
         "status": "In_Transit",
         "weight_kg": 0.5
     }
+
+
+@pytest_asyncio.fixture
+async def auth_headers(client: AsyncClient, test_user_data: dict) -> dict:
+    """Create a user and return auth headers."""
+    # Register user
+    await client.post("/api/auth/register", json=test_user_data)
+    
+    # Login
+    response = await client.post(
+        "/api/auth/login",
+        data={
+            "username": test_user_data["email"],
+            "password": test_user_data["password"]
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}

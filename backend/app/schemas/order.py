@@ -18,9 +18,18 @@ class OrderBase(BaseModel):
     comment: str | None = None
 
 
-class OrderCreate(OrderBase):
-    """Schema for creating a new order."""
-    pass
+class OrderCreate(BaseModel):
+    """Schema for creating a new order. exchange_rate and price_final are optional (auto-calculated)."""
+    platform: str = Field(..., max_length=64)
+    order_number_external: str = Field(..., max_length=128)
+    order_date: datetime
+    protection_end_date: datetime | None = None
+    price_original: Decimal = Field(..., ge=0, decimal_places=2)
+    currency_original: str = Field(..., max_length=3)
+    exchange_rate_frozen: Decimal | None = Field(None, gt=0, decimal_places=6)
+    price_final_base: Decimal | None = Field(None, ge=0, decimal_places=2)
+    is_price_estimated: bool | None = None
+    comment: str | None = None
 
 
 class OrderUpdate(BaseModel):

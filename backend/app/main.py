@@ -14,6 +14,7 @@ from app.api.orders import router as orders_router
 from app.api.parcels import router as parcels_router
 from app.api.users import router as users_router
 from app.api.order_items import router as order_items_router
+from app.api.currency import router as currency_router
 
 # Configure logging
 setup_logging()
@@ -51,6 +52,7 @@ app.include_router(orders_router, prefix="/api/orders", tags=["orders"])
 app.include_router(parcels_router, prefix="/api/parcels", tags=["parcels"])
 app.include_router(users_router, prefix="/api/users", tags=["users"])
 app.include_router(order_items_router, prefix="/api/order-items", tags=["order-items"])
+app.include_router(currency_router, prefix="/api/currency", tags=["currency"])
 
 
 # Exception handlers

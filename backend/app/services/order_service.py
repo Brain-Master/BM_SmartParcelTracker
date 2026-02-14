@@ -1,4 +1,6 @@
 """Order service layer."""
+import logging
+from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -6,6 +8,9 @@ from sqlalchemy.orm import selectinload
 from app.models.order import Order
 from app.schemas.order import OrderCreate, OrderUpdate
 from app.core.exceptions import NotFoundException
+from app.services import currency_service
+
+logger = logging.getLogger(__name__)
 
 
 async def get_order_by_id(db: AsyncSession, order_id: str, load_items: bool = False) -> Order:
@@ -38,8 +43,51 @@ async def get_user_orders(
     return list(result.scalars().all())
 
 
-async def create_order(db: AsyncSession, user_id: str, order_data: OrderCreate) -> Order:
-    """Create a new order."""
+async def create_order(
+    db: AsyncSession, 
+    user_id: str, 
+    order_data: OrderCreate, 
+    user_main_currency: str = "RUB"
+) -> Order:
+    """
+    Create a new order with automatic currency conversion.
+    
+    If exchange_rate_frozen is not provided and currency_original != user_main_currency,
+    the rate is fetched from CBR API and frozen.
+    """
+    # Determine exchange rate
+    if order_data.exchange_rate_frozen is not None:
+        # Manual rate provided by user
+        exchange_rate_frozen = order_data.exchange_rate_frozen
+        is_price_estimated = order_data.is_price_estimated or False
+    elif order_data.currency_original != user_main_currency:
+        # Auto-fetch rate from CBR
+        try:
+            rate = await currency_service.get_exchange_rate(
+                order_data.currency_original,
+                user_main_currency
+            )
+            exchange_rate_frozen = Decimal(str(rate))
+            is_price_estimated = True
+            logger.info(
+                f"Auto-fetched exchange rate: {order_data.currency_original} → {user_main_currency} = {rate}"
+            )
+        except Exception as e:
+            # Fallback: use 1.0 and mark as estimated
+            logger.warning(f"Failed to get exchange rate from CBR: {e}. Using fallback rate=1.0")
+            exchange_rate_frozen = Decimal("1.0")
+            is_price_estimated = True
+    else:
+        # Same currency, no conversion
+        exchange_rate_frozen = Decimal("1.0")
+        is_price_estimated = False
+    
+    # Calculate final price
+    if order_data.price_final_base is not None:
+        price_final_base = order_data.price_final_base
+    else:
+        price_final_base = order_data.price_original * exchange_rate_frozen
+    
     order = Order(
         user_id=user_id,
         platform=order_data.platform,
@@ -48,9 +96,9 @@ async def create_order(db: AsyncSession, user_id: str, order_data: OrderCreate) 
         protection_end_date=order_data.protection_end_date,
         price_original=order_data.price_original,
         currency_original=order_data.currency_original,
-        exchange_rate_frozen=order_data.exchange_rate_frozen,
-        price_final_base=order_data.price_final_base,
-        is_price_estimated=order_data.is_price_estimated,
+        exchange_rate_frozen=exchange_rate_frozen,
+        price_final_base=price_final_base,
+        is_price_estimated=is_price_estimated,
         comment=order_data.comment
     )
     db.add(order)

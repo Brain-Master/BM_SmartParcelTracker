@@ -3,7 +3,10 @@ import { DesktopDashboard } from './pages/DesktopDashboard'
 import { Login } from './pages/Login'
 import { Register } from './pages/Register'
 import { Profile } from './pages/Profile'
+import { OrderForm } from './pages/OrderForm'
+import { ParcelForm } from './pages/ParcelForm'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { AppLayout } from './components/AppLayout'
 
 function App() {
   return (
@@ -13,12 +16,44 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/" element={
           <ProtectedRoute>
-            <DesktopDashboard />
+            <AppLayout>
+              <DesktopDashboard />
+            </AppLayout>
           </ProtectedRoute>
         } />
         <Route path="/profile" element={
           <ProtectedRoute>
-            <Profile />
+            <AppLayout>
+              <Profile />
+            </AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/orders/new" element={
+          <ProtectedRoute>
+            <AppLayout>
+              <OrderForm />
+            </AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/orders/:id/edit" element={
+          <ProtectedRoute>
+            <AppLayout>
+              <OrderForm />
+            </AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/parcels/new" element={
+          <ProtectedRoute>
+            <AppLayout>
+              <ParcelForm />
+            </AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/parcels/:id/edit" element={
+          <ProtectedRoute>
+            <AppLayout>
+              <ParcelForm />
+            </AppLayout>
           </ProtectedRoute>
         } />
       </Routes>
