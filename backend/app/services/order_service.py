@@ -30,16 +30,18 @@ async def get_user_orders(
     db: AsyncSession, 
     user_id: str, 
     skip: int = 0, 
-    limit: int = 100
+    limit: int = 100,
+    load_items: bool = False
 ) -> list[Order]:
     """Get all orders for a user."""
-    result = await db.execute(
-        select(Order)
-        .where(Order.user_id == user_id)
-        .offset(skip)
-        .limit(limit)
-        .order_by(Order.created_at.desc())
-    )
+    query = select(Order).where(Order.user_id == user_id)
+    
+    if load_items:
+        query = query.options(selectinload(Order.order_items))
+    
+    query = query.offset(skip).limit(limit).order_by(Order.created_at.desc())
+    
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 

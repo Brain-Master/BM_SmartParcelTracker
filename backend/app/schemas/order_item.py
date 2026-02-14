@@ -1,5 +1,6 @@
 """OrderItem Pydantic schemas for API validation."""
 from datetime import datetime
+from decimal import Decimal
 from pydantic import BaseModel, Field, ConfigDict
 
 from app.models.enums import OrderItemStatus
@@ -12,6 +13,7 @@ class OrderItemBase(BaseModel):
     tags: list[str] = Field(default_factory=list)
     quantity_ordered: int = Field(1, ge=1)
     quantity_received: int = Field(0, ge=0)
+    price_per_item: Decimal | None = Field(None, ge=0, decimal_places=2)
     item_status: OrderItemStatus = OrderItemStatus.Waiting_Shipment
 
 
@@ -29,6 +31,7 @@ class OrderItemUpdate(BaseModel):
     tags: list[str] | None = None
     quantity_ordered: int | None = Field(None, ge=1)
     quantity_received: int | None = Field(None, ge=0)
+    price_per_item: Decimal | None = Field(None, ge=0, decimal_places=2)
     item_status: OrderItemStatus | None = None
 
 

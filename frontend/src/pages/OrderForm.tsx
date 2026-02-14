@@ -11,15 +11,16 @@ import type { OrderItem, Parcel } from '../types';
 interface NewItem {
   item_name: string;
   quantity_ordered: number;
+  price_per_item: string;
 }
 
 export function OrderForm() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { orders, createOrder, updateOrder, loading } = useOrders();
+  const { orders, createOrder, updateOrder, loading } = useOrders(true);
   const { user } = useCurrentUser();
   const { createItem, deleteItem } = useOrderItems();
-  const { parcels } = useParcels(true);
+  const { parcels } = useParcels();
 
   const isEditMode = !!id;
   const existingOrder = isEditMode ? orders.find(o => o.id === id) : null;
@@ -40,6 +41,8 @@ export function OrderForm() {
   const [existingItems, setExistingItems] = useState<OrderItem[]>([]);
   const [newItemName, setNewItemName] = useState('');
   const [newItemQty, setNewItemQty] = useState('1');
+  const [newItemPrice, setNewItemPrice] = useState('');
+  const [newItemTotalCost, setNewItemTotalCost] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [fetchingRate, setFetchingRate] = useState(false);
@@ -67,34 +70,25 @@ export function OrderForm() {
     }
   }, [existingOrder, isEditMode]);
 
-  // Load existing items in edit mode
+  // Load existing items in edit mode — items come from orders (include_items=true)
   useEffect(() => {
-    if (isEditMode && id && parcels.length > 0) {
-      // Items come from parcels (include_items=true)
-      const items: OrderItem[] = [];
-      for (const parcel of parcels) {
-        const withItems = parcel as { order_items?: Array<Record<string, unknown>> };
-        if (withItems.order_items) {
-          for (const raw of withItems.order_items) {
-            if (raw.order_id === id) {
-              items.push({
-                id: raw.id as string,
-                order_id: raw.order_id as string,
-                parcel_id: raw.parcel_id as string | null,
-                item_name: raw.item_name as string,
-                image_url: raw.image_url as string | null,
-                tags: (raw.tags as string[]) || [],
-                quantity_ordered: raw.quantity_ordered as number,
-                quantity_received: raw.quantity_received as number,
-                item_status: raw.item_status as OrderItem['item_status'],
-              });
-            }
-          }
-        }
-      }
+    if (isEditMode && id && existingOrder) {
+      const orderWithItems = existingOrder as unknown as { order_items?: Array<Record<string, unknown>> };
+      const items: OrderItem[] = (orderWithItems.order_items || []).map((raw) => ({
+        id: raw.id as string,
+        order_id: raw.order_id as string,
+        parcel_id: raw.parcel_id as string | null,
+        item_name: raw.item_name as string,
+        image_url: raw.image_url as string | null,
+        tags: (raw.tags as string[]) || [],
+        quantity_ordered: raw.quantity_ordered as number,
+        quantity_received: raw.quantity_received as number,
+        item_status: raw.item_status as OrderItem['item_status'],
+        price_per_item: raw.price_per_item as number | null | undefined,
+      }));
       setExistingItems(items);
     }
-  }, [isEditMode, id, parcels]);
+  }, [isEditMode, id, existingOrder]);
 
   // Auto-fetch exchange rate
   useEffect(() => {
@@ -119,13 +113,54 @@ export function OrderForm() {
     fetchRate();
   }, [currencyOriginal, user, manualRate, priceOriginal]);
 
-  const priceFinalBase = (parseFloat(priceOriginal) || 0) * (parseFloat(exchangeRate) || 1);
+  const priceFinalBase = parseFloat(((parseFloat(priceOriginal) || 0) * (parseFloat(exchangeRate) || 1)).toFixed(2));
 
   const addNewItem = () => {
     if (!newItemName.trim()) return;
-    setNewItems([...newItems, { item_name: newItemName.trim(), quantity_ordered: parseInt(newItemQty) || 1 }]);
+    setNewItems([...newItems, { item_name: newItemName.trim(), quantity_ordered: parseInt(newItemQty) || 1, price_per_item: newItemPrice }]);
     setNewItemName('');
     setNewItemQty('1');
+    setNewItemPrice('');
+    setNewItemTotalCost('');
+  };
+
+  // Auto-calculate when price or qty changes
+  const handlePriceChange = (value: string) => {
+    setNewItemPrice(value);
+    const qty = parseFloat(newItemQty) || 0;
+    const price = parseFloat(value) || 0;
+    if (qty > 0 && price > 0) {
+      setNewItemTotalCost((qty * price).toFixed(2));
+    } else {
+      setNewItemTotalCost('');
+    }
+  };
+
+  const handleQtyChange = (value: string) => {
+    setNewItemQty(value);
+    const qty = parseFloat(value) || 0;
+    const price = parseFloat(newItemPrice) || 0;
+    const total = parseFloat(newItemTotalCost) || 0;
+    
+    // If we have total cost, recalculate price
+    if (qty > 0 && total > 0 && !newItemPrice) {
+      setNewItemPrice((total / qty).toFixed(2));
+    }
+    // If we have price, recalculate total
+    else if (qty > 0 && price > 0) {
+      setNewItemTotalCost((qty * price).toFixed(2));
+    }
+  };
+
+  const handleTotalCostChange = (value: string) => {
+    setNewItemTotalCost(value);
+    const qty = parseFloat(newItemQty) || 0;
+    const total = parseFloat(value) || 0;
+    if (qty > 0 && total > 0) {
+      setNewItemPrice((total / qty).toFixed(2));
+    } else {
+      setNewItemPrice('');
+    }
   };
 
   const removeNewItem = (index: number) => {
@@ -149,10 +184,10 @@ export function OrderForm() {
       order_number_external: orderNumberExternal,
       order_date: new Date(orderDate).toISOString(),
       protection_end_date: protectionEndDate ? new Date(protectionEndDate).toISOString() : null,
-      price_original: parseFloat(priceOriginal),
+      price_original: parseFloat(parseFloat(priceOriginal).toFixed(2)),
       currency_original: currencyOriginal,
-      exchange_rate_frozen: manualRate && exchangeRate ? parseFloat(exchangeRate) : undefined,
-      price_final_base: manualRate && exchangeRate ? priceFinalBase : undefined,
+      exchange_rate_frozen: manualRate && exchangeRate ? parseFloat(parseFloat(exchangeRate).toFixed(6)) : undefined,
+      price_final_base: manualRate && exchangeRate ? parseFloat(priceFinalBase.toFixed(2)) : undefined,
       is_price_estimated: manualRate ? false : undefined,
       comment: comment || null,
     };
@@ -169,20 +204,22 @@ export function OrderForm() {
         // Create items for new order
         if (!isEditMode && newItems.length > 0) {
           for (const item of newItems) {
-            await createItem({
+            const created = await createItem({
               order_id: result.id,
               item_name: item.item_name,
               quantity_ordered: item.quantity_ordered,
+              price_per_item: item.price_per_item ? parseFloat(item.price_per_item) : undefined,
             });
           }
         }
         // Also create new items added in edit mode
         if (isEditMode && newItems.length > 0) {
           for (const item of newItems) {
-            await createItem({
+            const created = await createItem({
               order_id: id,
               item_name: item.item_name,
               quantity_ordered: item.quantity_ordered,
+              price_per_item: item.price_per_item ? parseFloat(item.price_per_item) : undefined,
             });
           }
         }
@@ -298,6 +335,9 @@ export function OrderForm() {
               <div key={item.id} className="flex items-center gap-2 mb-2 p-2 bg-slate-50 dark:bg-slate-900 rounded">
                 <span className="flex-1 text-sm text-slate-700 dark:text-slate-300">{item.item_name}</span>
                 <span className="text-sm text-slate-500">x{item.quantity_ordered}</span>
+                {item.price_per_item != null && (
+                  <span className="text-sm text-slate-500">{Number(item.price_per_item).toFixed(2)}</span>
+                )}
                 {item.parcel_id && (
                   <span className="text-xs text-blue-600 dark:text-blue-400">
                     📦 {allParcels.find(p => p.id === item.parcel_id)?.tracking_number || '—'}
@@ -312,31 +352,62 @@ export function OrderForm() {
               <div key={i} className="flex items-center gap-2 mb-2 p-2 bg-green-50 dark:bg-green-900/20 rounded">
                 <span className="flex-1 text-sm text-slate-700 dark:text-slate-300">{item.item_name}</span>
                 <span className="text-sm text-slate-500">x{item.quantity_ordered}</span>
+                {item.price_per_item && <span className="text-sm text-slate-500">{parseFloat(item.price_per_item).toFixed(2)}</span>}
                 <span className="text-xs text-green-600">новый</span>
                 <button type="button" onClick={() => removeNewItem(i)} className="text-red-500 hover:text-red-700 text-sm">✕</button>
               </div>
             ))}
 
             {/* Add item form */}
-            <div className="flex gap-2 mt-2">
+            <div className="space-y-2 mt-2">
               <input
                 type="text"
                 value={newItemName}
                 onChange={(e) => setNewItemName(e.target.value)}
                 placeholder="Название товара"
-                className="flex-1 px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNewItem(); } }}
               />
-              <input
-                type="number"
-                value={newItemQty}
-                onChange={(e) => setNewItemQty(e.target.value)}
-                min="1"
-                className="w-16 px-2 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
-              />
-              <button type="button" onClick={addNewItem} className="px-3 py-2 text-sm bg-slate-200 dark:bg-slate-700 rounded-md hover:bg-slate-300 dark:hover:bg-slate-600">
-                +
-              </button>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    value={newItemQty}
+                    onChange={(e) => handleQtyChange(e.target.value)}
+                    min="1"
+                    placeholder="Кол-во"
+                    className="w-full px-2 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
+                  />
+                  <label className="text-xs text-slate-500">Кол-во</label>
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    value={newItemPrice}
+                    onChange={(e) => handlePriceChange(e.target.value)}
+                    min="0"
+                    step="0.01"
+                    placeholder="Цена за шт"
+                    className="w-full px-2 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
+                  />
+                  <label className="text-xs text-slate-500">Цена за шт</label>
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    value={newItemTotalCost}
+                    onChange={(e) => handleTotalCostChange(e.target.value)}
+                    min="0"
+                    step="0.01"
+                    placeholder="Стоимость"
+                    className="w-full px-2 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
+                  />
+                  <label className="text-xs text-slate-500">Стоимость</label>
+                </div>
+                <button type="button" onClick={addNewItem} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                  +
+                </button>
+              </div>
             </div>
           </div>
 

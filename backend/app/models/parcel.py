@@ -24,6 +24,12 @@ class Parcel(Base, TimestampMixin):
         nullable=False,
         index=True,
     )
+    order_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("orders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     tracking_number: Mapped[str] = mapped_column(String(128), nullable=False, index=True)  # NOT unique
     carrier_slug: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[ParcelStatus] = mapped_column(
@@ -38,4 +44,5 @@ class Parcel(Base, TimestampMixin):
     weight_kg: Mapped[Decimal | None] = mapped_column(NUMERIC(8, 3), nullable=True)
 
     user = relationship("User", back_populates="parcels")
+    order = relationship("Order", back_populates="parcels")
     order_items = relationship("OrderItem", back_populates="parcel")

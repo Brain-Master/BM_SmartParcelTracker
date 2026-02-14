@@ -17,7 +17,7 @@ class ParcelBase(BaseModel):
 
 class ParcelCreate(ParcelBase):
     """Schema for creating a new parcel."""
-    pass
+    order_id: str | None = None
 
 
 class ParcelUpdate(BaseModel):
@@ -27,12 +27,14 @@ class ParcelUpdate(BaseModel):
     status: ParcelStatus | None = None
     tracking_updated_at: datetime | None = None
     weight_kg: Decimal | None = Field(None, ge=0, decimal_places=3)
+    order_id: str | None = None
 
 
 class ParcelRead(ParcelBase):
     """Schema for reading parcel data (response)."""
     id: str
     user_id: str
+    order_id: str | None = None
     created_at: datetime
     updated_at: datetime
     

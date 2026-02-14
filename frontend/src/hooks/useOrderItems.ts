@@ -12,13 +12,14 @@ export function useOrderItems() {
     item_name: string;
     quantity_ordered?: number;
     quantity_received?: number;
+    price_per_item?: number | null;
     item_status?: string;
     tags?: string[];
   }): Promise<OrderItem | null> => {
     setLoading(true);
     setError(null);
     try {
-      const item = await apiClient.post<OrderItem>('/order-items/', {
+      const payload: Record<string, unknown> = {
         order_id: data.order_id,
         parcel_id: data.parcel_id || null,
         item_name: data.item_name,
@@ -26,7 +27,11 @@ export function useOrderItems() {
         quantity_received: data.quantity_received ?? 0,
         item_status: data.item_status ?? 'Waiting_Shipment',
         tags: data.tags ?? [],
-      });
+      };
+      if (data.price_per_item != null) {
+        payload.price_per_item = data.price_per_item;
+      }
+      const item = await apiClient.post<OrderItem>('/order-items/', payload);
       return item;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create item');

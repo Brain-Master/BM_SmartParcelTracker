@@ -41,6 +41,7 @@ export interface Order {
 export interface Parcel {
   id: string
   user_id: string
+  order_id: string | null
   tracking_number: string
   carrier_slug: string
   status: ParcelStatus
@@ -58,6 +59,7 @@ export interface OrderItem {
   quantity_ordered: number
   quantity_received: number
   item_status: OrderItemStatus
+  price_per_item?: number | null
 }
 
 /** Row for Master Table: Parcel + items (grouping) — legacy */

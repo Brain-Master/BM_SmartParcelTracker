@@ -63,7 +63,8 @@ class ApiClient {
       return null as T;
     }
 
-    return response.json();
+    const jsonData = await response.json();
+    return jsonData;
   }
 
   async get<T>(endpoint: string): Promise<T> {

@@ -42,3 +42,4 @@ class Order(Base, TimestampMixin):
 
     user = relationship("User", back_populates="orders")
     order_items = relationship("OrderItem", back_populates="order")
+    parcels = relationship("Parcel", back_populates="order")

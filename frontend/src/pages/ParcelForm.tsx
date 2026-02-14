@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useParcels } from '../hooks/useParcels';
 import { useOrders } from '../hooks/useOrders';
@@ -9,8 +9,8 @@ import type { ParcelStatus, OrderItem } from '../types';
 export function ParcelForm() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { parcels, createParcel, updateParcel, loading } = useParcels(true);
-  const { orders } = useOrders();
+  const { parcels, createParcel, updateParcel, loading } = useParcels();
+  const { orders } = useOrders(true); // include items
   const { updateItem } = useOrderItems();
 
   const isEditMode = !!id;
@@ -21,40 +21,44 @@ export function ParcelForm() {
   const [carrierSlug, setCarrierSlug] = useState('');
   const [status, setStatus] = useState<ParcelStatus>('Created');
   const [weightKg, setWeightKg] = useState('');
+  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
 
   // Items to link to this parcel
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [itemQuantities, setItemQuantities] = useState<Map<string, number>>(new Map());
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Collect all unlinked order items (no parcel_id) + items already linked to this parcel
-  const availableItems: (OrderItem & { orderPlatform: string; orderNumber: string })[] = [];
-  for (const parcel of parcels) {
-    const withItems = parcel as { order_items?: Array<Record<string, unknown>> };
-    if (withItems.order_items) {
-      for (const raw of withItems.order_items) {
-        const parcelId = raw.parcel_id as string | null;
-        // Show items that are unlinked OR linked to current parcel
-        if (!parcelId || (isEditMode && parcelId === id)) {
-          const order = orders.find(o => o.id === raw.order_id);
-          availableItems.push({
-            id: raw.id as string,
-            order_id: raw.order_id as string,
-            parcel_id: parcelId,
-            item_name: raw.item_name as string,
-            image_url: raw.image_url as string | null,
-            tags: (raw.tags as string[]) || [],
-            quantity_ordered: raw.quantity_ordered as number,
-            quantity_received: raw.quantity_received as number,
-            item_status: raw.item_status as OrderItem['item_status'],
-            orderPlatform: order?.platform || '?',
-            orderNumber: order?.order_number_external || '?',
-          });
+  // Collect all items from orders: unlinked (no parcel_id) + items already linked to this parcel
+  const availableItems = useMemo(() => {
+    const items: (OrderItem & { orderPlatform: string; orderNumber: string })[] = [];
+    for (const order of orders) {
+      const orderWithItems = order as unknown as { order_items?: Array<Record<string, unknown>> };
+      if (orderWithItems.order_items) {
+        for (const raw of orderWithItems.order_items) {
+          const parcelId = raw.parcel_id as string | null;
+          // Show items that are unlinked OR linked to current parcel
+          if (!parcelId || (isEditMode && parcelId === id)) {
+            items.push({
+              id: raw.id as string,
+              order_id: raw.order_id as string,
+              parcel_id: parcelId,
+              item_name: raw.item_name as string,
+              image_url: raw.image_url as string | null,
+              tags: (raw.tags as string[]) || [],
+              quantity_ordered: raw.quantity_ordered as number,
+              quantity_received: raw.quantity_received as number,
+              item_status: raw.item_status as OrderItem['item_status'],
+              orderPlatform: order.platform || '?',
+              orderNumber: order.order_number_external || '?',
+            });
+          }
         }
       }
     }
-  }
+    return items;
+  }, [orders, isEditMode, id]);
 
   useEffect(() => {
     if (existingParcel && isEditMode) {
@@ -62,20 +66,46 @@ export function ParcelForm() {
       setCarrierSlug(existingParcel.carrier_slug);
       setStatus(existingParcel.status);
       setWeightKg(existingParcel.weight_kg?.toString() || '');
+      setSelectedOrderId(existingParcel.order_id || '');
       // Pre-select items already linked to this parcel
-      const linked = new Set(availableItems.filter(i => i.parcel_id === id).map(i => i.id));
+      const linkedItems = availableItems.filter(i => i.parcel_id === id);
+      const linked = new Set(linkedItems.map(i => i.id));
       setSelectedItemIds(linked);
+      // Initialize quantities from quantity_received
+      const quantities = new Map<string, number>();
+      for (const item of linkedItems) {
+        quantities.set(item.id, item.quantity_received || item.quantity_ordered);
+      }
+      setItemQuantities(quantities);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existingParcel, isEditMode]);
+  }, [existingParcel, isEditMode, availableItems]);
 
   const toggleItem = (itemId: string) => {
     setSelectedItemIds(prev => {
       const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+        // Remove quantity
+        setItemQuantities(q => {
+          const newQ = new Map(q);
+          newQ.delete(itemId);
+          return newQ;
+        });
+      } else {
+        next.add(itemId);
+        // Initialize quantity to quantity_ordered
+        const item = availableItems.find(i => i.id === itemId);
+        if (item) {
+          setItemQuantities(q => new Map(q).set(itemId, item.quantity_ordered));
+        }
+      }
       return next;
     });
+  };
+
+  const updateItemQuantity = (itemId: string, quantity: number) => {
+    setItemQuantities(prev => new Map(prev).set(itemId, quantity));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,6 +118,7 @@ export function ParcelForm() {
       carrier_slug: carrierSlug,
       status,
       weight_kg: weightKg ? parseFloat(weightKg) : null,
+      order_id: selectedOrderId || null,
     };
 
     try {
@@ -99,14 +130,19 @@ export function ParcelForm() {
       }
 
       if (parcelResult) {
-        // Link selected items to this parcel
+        // Link selected items to this parcel and set quantities
         for (const item of availableItems) {
           if (selectedItemIds.has(item.id) && item.parcel_id !== parcelResult.id) {
-            // Link item to parcel
-            await updateItem(item.id, { parcel_id: parcelResult.id });
+            const quantity = itemQuantities.get(item.id) || item.quantity_ordered;
+            await updateItem(item.id, { 
+              parcel_id: parcelResult.id,
+              quantity_received: quantity 
+            });
           } else if (!selectedItemIds.has(item.id) && item.parcel_id === parcelResult.id) {
-            // Unlink item from parcel
-            await updateItem(item.id, { parcel_id: null });
+            await updateItem(item.id, { 
+              parcel_id: null,
+              quantity_received: 0 
+            });
           }
         }
         navigate('/');
@@ -171,6 +207,17 @@ export function ParcelForm() {
             <input type="number" id="weight" step="0.01" min="0" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" placeholder="Опционально" />
           </div>
 
+          {/* Link to order */}
+          <div>
+            <label htmlFor="orderId" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Привязать к заказу</label>
+            <select id="orderId" value={selectedOrderId} onChange={(e) => setSelectedOrderId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100">
+              <option value="">Без привязки к заказу</option>
+              {orders.map(o => (
+                <option key={o.id} value={o.id}>{o.platform} — #{o.order_number_external}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Link items to this parcel */}
           {availableItems.length > 0 && (
             <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
@@ -181,21 +228,40 @@ export function ParcelForm() {
                 Выберите товары из заказов, которые находятся в этой посылке:
               </p>
               <div className="space-y-2">
-                {availableItems.map(item => (
-                  <label key={item.id} className="flex items-center gap-3 p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedItemIds.has(item.id)}
-                      onChange={() => toggleItem(item.id)}
-                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div className="flex-1 text-sm">
-                      <span className="text-slate-700 dark:text-slate-300">{item.item_name}</span>
-                      <span className="text-slate-400 ml-2">x{item.quantity_ordered}</span>
+                {availableItems.map(item => {
+                  const isSelected = selectedItemIds.has(item.id);
+                  const quantity = itemQuantities.get(item.id) || item.quantity_ordered;
+                  return (
+                    <div key={item.id} className="p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleItem(item.id)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div className="flex-1 text-sm">
+                          <span className="text-slate-700 dark:text-slate-300">{item.item_name}</span>
+                          <span className="text-slate-400 ml-2">заказано: {item.quantity_ordered}</span>
+                        </div>
+                        <span className="text-xs text-slate-400">{item.orderPlatform} #{item.orderNumber}</span>
+                      </label>
+                      {isSelected && (
+                        <div className="ml-8 mt-2 flex items-center gap-2">
+                          <label className="text-xs text-slate-500">Кол-во в посылке:</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max={item.quantity_ordered}
+                            value={quantity}
+                            onChange={(e) => updateItemQuantity(item.id, parseInt(e.target.value) || 1)}
+                            className="w-20 px-2 py-1 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
+                          />
+                        </div>
+                      )}
                     </div>
-                    <span className="text-xs text-slate-400">{item.orderPlatform} #{item.orderNumber}</span>
-                  </label>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

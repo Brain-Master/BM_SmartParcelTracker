@@ -1,6 +1,7 @@
 """OrderItems — Связующее звено / SKU. Order ↔ Parcel; supports split shipments."""
+from decimal import Decimal
 from sqlalchemy import ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID, ARRAY, NUMERIC
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, gen_uuid
@@ -32,6 +33,7 @@ class OrderItem(Base, TimestampMixin):
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, nullable=False)
     quantity_ordered: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     quantity_received: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    price_per_item: Mapped[Decimal | None] = mapped_column(NUMERIC(14, 2), nullable=True)
     item_status: Mapped[OrderItemStatus] = mapped_column(
         default=OrderItemStatus.Waiting_Shipment,
         nullable=False,

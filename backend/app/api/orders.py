@@ -5,21 +5,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_active_user
 from app.models.user import User
-from app.schemas.order import OrderCreate, OrderRead, OrderUpdate
+from app.schemas.order import OrderCreate, OrderRead, OrderUpdate, OrderWithItems
 from app.services import order_service
 
 router = APIRouter()
 
 
-@router.get("/", response_model=list[OrderRead])
+@router.get("/", response_model=list[OrderRead | OrderWithItems])
 async def list_orders(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
+    include_items: bool = Query(False, description="Include order items in response"),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get all orders for the current user."""
-    orders = await order_service.get_user_orders(db, current_user.id, skip, limit)
+    orders = await order_service.get_user_orders(
+        db, current_user.id, skip, limit, load_items=include_items
+    )
     return orders
 
 

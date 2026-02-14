@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
-import { Order } from '../types';
+import { Order, OrderItem } from '../types';
 
-export function useOrders() {
-  const [orders, setOrders] = useState<Order[]>([]);
+interface OrderWithItems extends Order {
+  order_items?: OrderItem[];
+}
+
+export function useOrders(includeItems: boolean = false) {
+  const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -11,7 +15,8 @@ export function useOrders() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiClient.get<Order[]>('/orders/');
+      const queryParam = includeItems ? '?include_items=true' : '';
+      const data = await apiClient.get<OrderWithItems[]>(`/orders/${queryParam}`);
       setOrders(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch orders');
@@ -22,7 +27,8 @@ export function useOrders() {
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeItems]);
 
   const createOrder = async (orderData: Partial<Order>): Promise<Order | null> => {
     try {

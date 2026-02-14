@@ -43,6 +43,7 @@ async def create_order_item(db: AsyncSession, item_data: OrderItemCreate) -> Ord
         tags=item_data.tags,
         quantity_ordered=item_data.quantity_ordered,
         quantity_received=item_data.quantity_received,
+        price_per_item=item_data.price_per_item,
         item_status=item_data.item_status
     )
     db.add(item)

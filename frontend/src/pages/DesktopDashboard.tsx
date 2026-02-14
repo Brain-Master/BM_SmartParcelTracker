@@ -14,50 +14,56 @@ import type { OrderRow, Order, OrderItem, Parcel } from '../types'
 export function DesktopDashboard() {
   const navigate = useNavigate()
   const { user } = useCurrentUser()
-  const { parcels, loading: parcelsLoading, error: parcelsError, refetch: refetchParcels } = useParcels(true)
-  const { orders, loading: ordersLoading, error: ordersError, refetch: refetchOrders } = useOrders()
+  const { parcels, loading: parcelsLoading, error: parcelsError, refetch: refetchParcels } = useParcels()
+  const { orders, loading: ordersLoading, error: ordersError, refetch: refetchOrders } = useOrders(true)
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({})
 
-  // Build order-centric rows
+  // Build order-centric rows — items come from orders (include_items=true)
   const orderRows: OrderRow[] = useMemo(() => {
-    // Collect all order items from parcels (they come with include_items=true)
-    const allItems: OrderItem[] = []
     const parcelMap = new Map<string, Parcel>()
-
     for (const parcel of parcels) {
       parcelMap.set(parcel.id, parcel)
-      const withItems = parcel as { order_items?: Array<Record<string, unknown>> }
-      if (withItems.order_items) {
-        for (const raw of withItems.order_items) {
-          allItems.push({
-            id: raw.id as string,
-            order_id: raw.order_id as string,
-            parcel_id: raw.parcel_id as string | null,
-            item_name: raw.item_name as string,
-            image_url: raw.image_url as string | null,
-            tags: (raw.tags as string[]) || [],
-            quantity_ordered: raw.quantity_ordered as number,
-            quantity_received: raw.quantity_received as number,
-            item_status: raw.item_status as OrderItem['item_status'],
-          })
-        }
-      }
     }
 
-    return orders.map((order: Order) => {
-      const items = allItems.filter(i => i.order_id === order.id)
+    return orders.map((order) => {
+      const orderWithItems = order as unknown as { order_items?: Array<Record<string, unknown>> }
+      const items: OrderItem[] = (orderWithItems.order_items || []).map((raw) => ({
+        id: raw.id as string,
+        order_id: raw.order_id as string,
+        parcel_id: raw.parcel_id as string | null,
+        item_name: raw.item_name as string,
+        image_url: raw.image_url as string | null,
+        tags: (raw.tags as string[]) || [],
+        quantity_ordered: raw.quantity_ordered as number,
+        quantity_received: raw.quantity_received as number,
+        item_status: raw.item_status as OrderItem['item_status'],
+        price_per_item: raw.price_per_item as number | null | undefined,
+      }))
+      // Parcels linked via items' parcel_id
       const linkedParcelIds = new Set(items.map(i => i.parcel_id).filter(Boolean) as string[])
+      // Also include parcels linked directly via parcel.order_id
+      for (const p of parcels) {
+        if (p.order_id === order.id) {
+          linkedParcelIds.add(p.id)
+        }
+      }
       const linkedParcels = Array.from(linkedParcelIds).map(pid => parcelMap.get(pid)).filter(Boolean) as Parcel[]
 
       return { order, items, parcels: linkedParcels }
     })
   }, [orders, parcels])
 
-  // Also find "orphan" parcels (not linked to any order)
+  // Also find "orphan" parcels (not linked to any order via items or order_id)
   const orphanParcels = useMemo(() => {
     const linkedParcelIds = new Set<string>()
     for (const row of orderRows) {
       for (const p of row.parcels) {
+        linkedParcelIds.add(p.id)
+      }
+    }
+    // Also exclude parcels linked via order_id
+    for (const p of parcels) {
+      if (p.order_id) {
         linkedParcelIds.add(p.id)
       }
     }
@@ -83,19 +89,41 @@ export function DesktopDashboard() {
     setExpandedOrders(all)
   }
 
-  const currencySymbol = user?.main_currency === 'USD' ? '$' : user?.main_currency === 'EUR' ? '€' : '₽'
-
-  const formatPrice = (order: Order) => {
-    const price = typeof order.price_final_base === 'string' ? parseFloat(order.price_final_base) : order.price_final_base
-    return `${price.toFixed(0)} ${currencySymbol}`
+  const getCurrencySymbol = (currency: string) => {
+    switch (currency) {
+      case 'USD': return '$'
+      case 'EUR': return '€'
+      case 'RUB': return '₽'
+      default: return currency
+    }
   }
 
-  const totalSum = orderRows.reduce((sum, row) => {
-    const price = typeof row.order.price_final_base === 'string'
-      ? parseFloat(row.order.price_final_base)
-      : (row.order.price_final_base || 0)
-    return sum + price
-  }, 0)
+  const formatPrice = (order: Order) => {
+    // Show original price in original currency (not converted)
+    const price = typeof order.price_original === 'string' ? parseFloat(order.price_original) : order.price_original
+    const symbol = getCurrencySymbol(order.currency_original)
+    return `${price.toFixed(0)} ${symbol}`
+  }
+
+  // Calculate total sums grouped by currency (since we can't reliably convert without knowing base currency at creation time)
+  const totalsByCurrency = orderRows.reduce((totals, row) => {
+    const order = row.order
+    const currency = order.currency_original
+    const price = typeof order.price_original === 'string'
+      ? parseFloat(order.price_original)
+      : (order.price_original || 0)
+    
+    if (!totals[currency]) {
+      totals[currency] = 0
+    }
+    totals[currency] += price
+    return totals
+  }, {} as Record<string, number>)
+
+  // Format totals as string (e.g. "10000 ₽ + 500 $ + 300 €")
+  const totalSummary = Object.entries(totalsByCurrency)
+    .map(([currency, total]) => `${total.toFixed(0)} ${getCurrencySymbol(currency)}`)
+    .join(' + ') || '0'
 
   return (
     <div>
@@ -143,8 +171,8 @@ export function DesktopDashboard() {
               <span className="text-3xl">💰</span>
               <div>
                 <p className="text-sm text-slate-600 dark:text-slate-400">Сумма</p>
-                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                  {totalSum.toFixed(0)} {currencySymbol}
+                <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                  {totalSummary}
                 </p>
               </div>
             </div>
