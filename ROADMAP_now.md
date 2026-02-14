@@ -118,6 +118,8 @@
 8. ✅ JWT timestamp serialization — `int(expire.timestamp())` вместо datetime
 9. ✅ Order update validation — округление decimal до 2 знаков
 10. ✅ Items visibility — загрузка items через `/orders?include_items=true`
+11. ✅ Archive/unarchive cost preservation — в `recalculate_order_totals`: если вычисленная сумма = 0 (у позиций нет `price_per_item`), сохраняем существующие `price_original`/`price_final_base`, чтобы архивация и возврат из архива не обнуляли стоимость
+12. ✅ Cascade-archive exclusive parcels — при архивации заказа автоматически архивируются посылки, содержащие только товары этого заказа (эксклюзивные посылки); логика в `_archive_exclusive_parcels_for_order`
 
 ---
 
