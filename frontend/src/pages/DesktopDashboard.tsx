@@ -2,51 +2,37 @@
  * Desktop Command Center — §4.1
  * Master Table, filters (потеряшки, теги, ожидают действий), Export CSV.
  */
+import { useMemo } from 'react'
 import { MasterTable } from '../components/MasterTable'
-import type { ParcelRow } from '../types'
-
-const mockRows: ParcelRow[] = [
-  {
-    parcel: {
-      id: '1',
-      user_id: 'u1',
-      tracking_number: 'RR123456789CN',
-      carrier_slug: 'russian-post',
-      status: 'In_Transit',
-      tracking_updated_at: new Date().toISOString(),
-      weight_kg: 0.5,
-    },
-    orderItems: [
-      {
-        id: 'oi1',
-        order_id: 'o1',
-        parcel_id: '1',
-        item_name: 'Пример товара',
-        image_url: null,
-        tags: ['electronics', 'gift'],
-        quantity_ordered: 2,
-        quantity_received: 0,
-        item_status: 'Shipped',
-      },
-    ],
-    order: {
-      id: 'o1',
-      user_id: 'u1',
-      platform: 'AliExpress',
-      order_number_external: 'AE123',
-      order_date: new Date().toISOString(),
-      protection_end_date: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString(),
-      price_original: 100,
-      currency_original: 'USD',
-      exchange_rate_frozen: 92.5,
-      price_final_base: 9250,
-      is_price_estimated: true,
-      comment: null,
-    },
-  },
-]
+import { LoadingSpinner } from '../components/LoadingSpinner'
+import { ErrorMessage } from '../components/ErrorMessage'
+import { useParcels } from '../hooks/useParcels'
+import { useOrders } from '../hooks/useOrders'
+import type { ParcelRow, OrderItem } from '../types'
 
 export function DesktopDashboard() {
+  const { parcels, loading: parcelsLoading, error: parcelsError, refetch: refetchParcels } = useParcels()
+  const { orders, loading: ordersLoading, error: ordersError, refetch: refetchOrders } = useOrders()
+
+  const rows: ParcelRow[] = useMemo(() => {
+    // Group parcels with their order items and orders
+    // This is a simplified version - in production, you'd want to fetch 
+    // related data through proper API endpoints
+    return parcels.map(parcel => ({
+      parcel,
+      orderItems: [] as OrderItem[], // Will be populated when order_items endpoint is ready
+      order: orders.find(o => o.user_id === parcel.user_id),
+    }))
+  }, [parcels, orders])
+
+  const loading = parcelsLoading || ordersLoading
+  const error = parcelsError || ordersError
+
+  const handleRetry = () => {
+    refetchParcels()
+    refetchOrders()
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-6">
       <header className="mb-6">
@@ -57,7 +43,10 @@ export function DesktopDashboard() {
           Фильтры: Потеряшки · Ожидают действий · По тегам
         </p>
       </header>
-      <MasterTable rows={mockRows} />
+
+      {loading && <LoadingSpinner />}
+      {error && <ErrorMessage message={error} onRetry={handleRetry} />}
+      {!loading && !error && <MasterTable rows={rows} />}
     </div>
   )
 }
