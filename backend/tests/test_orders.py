@@ -101,3 +101,29 @@ async def test_list_orders_unauthorized(client: AsyncClient):
     """Test listing orders without authentication fails."""
     response = await client.get("/api/orders/")
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_orders_excludes_archived(client: AsyncClient, test_user_data, test_order_data):
+    """By default list does not return archived orders."""
+    headers = await get_auth_headers(client, test_user_data)
+    create_response = await client.post("/api/orders/", json=test_order_data, headers=headers)
+    order_id = create_response.json()["id"]
+    await client.put(f"/api/orders/{order_id}", json={"is_archived": True}, headers=headers)
+    response = await client.get("/api/orders/", headers=headers)
+    assert response.status_code == 200
+    assert len(response.json()) == 0
+
+
+@pytest.mark.asyncio
+async def test_list_orders_include_archived(client: AsyncClient, test_user_data, test_order_data):
+    """With include_archived=true archived orders are returned."""
+    headers = await get_auth_headers(client, test_user_data)
+    create_response = await client.post("/api/orders/", json=test_order_data, headers=headers)
+    order_id = create_response.json()["id"]
+    await client.put(f"/api/orders/{order_id}", json={"is_archived": True}, headers=headers)
+    response = await client.get("/api/orders/?include_archived=true", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["is_archived"] is True

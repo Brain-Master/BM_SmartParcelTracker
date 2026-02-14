@@ -49,6 +49,7 @@ class Order(Base, TimestampMixin):
         nullable=True,
         index=True,
     )
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     user = relationship("User", back_populates="orders")
     order_items = relationship("OrderItem", back_populates="order")

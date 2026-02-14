@@ -62,6 +62,8 @@ export interface Order {
   customs_cost?: number | null
   /** Set when order is soft-deleted (variant C: shared parcels). */
   deleted_at?: string | null
+  /** Sprint 2.2.3: archived orders hidden by default. */
+  is_archived?: boolean
 }
 
 export interface Parcel {
@@ -73,6 +75,8 @@ export interface Parcel {
   status: ParcelStatus
   tracking_updated_at: string | null
   weight_kg: number | null
+  /** Sprint 2.2.3: archived parcels hidden by default. */
+  is_archived?: boolean
 }
 
 /** Quantity of an order item in one parcel (split shipments). */

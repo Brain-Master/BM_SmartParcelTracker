@@ -2,7 +2,7 @@
 from decimal import Decimal
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID, NUMERIC
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,6 +37,7 @@ class Parcel(Base, TimestampMixin):
         nullable=True,
     )
     weight_kg: Mapped[Decimal | None] = mapped_column(NUMERIC(8, 3), nullable=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     user = relationship("User", back_populates="parcels")
     order_items = relationship("OrderItem", back_populates="parcel")

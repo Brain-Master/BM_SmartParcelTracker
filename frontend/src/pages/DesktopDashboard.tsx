@@ -82,10 +82,13 @@ function parcelMatchesPreset(p: Parcel, preset: PresetKey): boolean {
 export function DesktopDashboard() {
   const navigate = useNavigate()
   useCurrentUser()
-  const { parcels, loading: parcelsLoading, error: parcelsError, refetch: refetchParcels, deleteParcel } = useParcels()
-  const { orders, loading: ordersLoading, error: ordersError, refetch: refetchOrders, deleteOrder } = useOrders(true)
+  const [showArchived, setShowArchived] = useState(false)
+  const { parcels, loading: parcelsLoading, error: parcelsError, refetch: refetchParcels, deleteParcel, archiveParcel } = useParcels(false, showArchived)
+  const { orders, loading: ordersLoading, error: ordersError, refetch: refetchOrders, deleteOrder, archiveOrder } = useOrders(true, showArchived)
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({})
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null)
+  const [archivingOrderId, setArchivingOrderId] = useState<string | null>(null)
+  const [archivingParcelId, setArchivingParcelId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterPlatform, setFilterPlatform] = useState('')
   const [filterCarrier, setFilterCarrier] = useState('')
@@ -253,6 +256,26 @@ export function DesktopDashboard() {
     }
   }
 
+  const handleArchiveOrder = async (orderId: string) => {
+    setArchivingOrderId(orderId)
+    const ok = await archiveOrder(orderId)
+    setArchivingOrderId(null)
+    if (ok) {
+      refetchOrders()
+      refetchParcels()
+    }
+  }
+
+  const handleArchiveParcel = async (parcelId: string) => {
+    setArchivingParcelId(parcelId)
+    const ok = await archiveParcel(parcelId)
+    setArchivingParcelId(null)
+    if (ok) {
+      refetchOrders()
+      refetchParcels()
+    }
+  }
+
   const collapseAll = () => setExpandedOrders({})
   const expandAll = () => {
     const all: Record<string, boolean> = {}
@@ -270,6 +293,8 @@ export function DesktopDashboard() {
   }
 
   const hasActiveFilters = searchQuery.trim() !== '' || filterPlatform !== '' || filterCarrier !== '' || activePreset !== 'none'
+  const orderIsArchived = (order: Order) => !!(order as { is_archived?: boolean }).is_archived
+  const parcelIsArchived = (parcel: Parcel) => !!(parcel as { is_archived?: boolean }).is_archived
 
   // Derive filter options from actual data (not empty stores/carriers API)
   const filterPlatformOptions = useMemo(() => {
@@ -511,6 +536,16 @@ export function DesktopDashboard() {
               >
                 Сбросить всё
               </button>
+              <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showArchived}
+                  onChange={(e) => setShowArchived(e.target.checked)}
+                  className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+                  aria-label="Показать архив"
+                />
+                <span>Показать архив</span>
+              </label>
             </div>
           </div>
 
@@ -558,6 +593,11 @@ export function DesktopDashboard() {
                       <span className="text-lg font-semibold text-slate-800 dark:text-slate-100">
                         {(row.order as { label?: string | null }).label || `${row.order.platform} #${row.order.order_number_external}`}
                       </span>
+                      {orderIsArchived(row.order) && (
+                        <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300">
+                          В архиве
+                        </span>
+                      )}
                       {((row.order as { label?: string | null }).label) && (
                         <span className="text-sm text-slate-500 dark:text-slate-400">
                           {row.order.platform} #{row.order.order_number_external}
@@ -590,6 +630,17 @@ export function DesktopDashboard() {
                   >
                     Ред.
                   </button>
+                  {!orderIsArchived(row.order) && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleArchiveOrder(row.order.id) }}
+                      disabled={archivingOrderId === row.order.id}
+                      className="ml-1 px-2 py-1 text-xs text-slate-600 hover:text-slate-800 dark:text-slate-400 disabled:opacity-50"
+                      aria-label="В архив"
+                    >
+                      {archivingOrderId === row.order.id ? '…' : 'В архив'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); handleDeleteOrder(row.order.id, row.order.platform, row.order.order_number_external) }}
@@ -680,6 +731,11 @@ export function DesktopDashboard() {
                                   }`}>
                                     {parcel.status.replace('_', ' ')}
                                   </span>
+                                  {parcelIsArchived(parcel) && (
+                                    <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300">
+                                      В архиве
+                                    </span>
+                                  )}
                                 </div>
                                 {itemsInParcel.length > 0 ? (
                                   <p className="text-xs text-slate-500 mt-1">
@@ -697,6 +753,16 @@ export function DesktopDashboard() {
                                 >
                                   Ред.
                                 </button>
+                                {!parcelIsArchived(parcel) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleArchiveParcel(parcel.id) }}
+                                    disabled={archivingParcelId === parcel.id}
+                                    className="px-2 py-1 text-xs text-slate-600 hover:text-slate-800 dark:text-slate-400 disabled:opacity-50"
+                                  >
+                                    {archivingParcelId === parcel.id ? '…' : 'В архив'}
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); handleDeleteParcel(parcel.id) }}
@@ -739,6 +805,11 @@ export function DesktopDashboard() {
                     }`}>
                       {parcel.status.replace('_', ' ')}
                     </span>
+                    {parcelIsArchived(parcel) && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300">
+                        В архиве
+                      </span>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -747,6 +818,16 @@ export function DesktopDashboard() {
                   >
                     Ред.
                   </button>
+                  {!parcelIsArchived(parcel) && (
+                    <button
+                      type="button"
+                      onClick={() => handleArchiveParcel(parcel.id)}
+                      disabled={archivingParcelId === parcel.id}
+                      className="px-2 py-1 text-xs text-slate-600 hover:text-slate-800 dark:text-slate-400 disabled:opacity-50"
+                    >
+                      {archivingParcelId === parcel.id ? '…' : 'В архив'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleDeleteParcel(parcel.id)}

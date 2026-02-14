@@ -22,15 +22,17 @@ async def get_parcel_by_id(db: AsyncSession, parcel_id: str, load_items: bool = 
 
 
 async def get_user_parcels(
-    db: AsyncSession, 
-    user_id: str, 
-    skip: int = 0, 
+    db: AsyncSession,
+    user_id: str,
+    skip: int = 0,
     limit: int = 100,
-    load_items: bool = False
+    load_items: bool = False,
+    include_archived: bool = False,
 ) -> list[Parcel]:
-    """Get all parcels for a user."""
+    """Get all parcels for a user. By default excludes archived."""
     query = select(Parcel).where(Parcel.user_id == user_id)
-    
+    if not include_archived:
+        query = query.where(Parcel.is_archived.is_(False))
     if load_items:
         query = query.options(selectinload(Parcel.order_items))
     
@@ -49,7 +51,8 @@ async def create_parcel(db: AsyncSession, user_id: str, parcel_data: ParcelCreat
         label=parcel_data.label,
         status=parcel_data.status,
         tracking_updated_at=parcel_data.tracking_updated_at,
-        weight_kg=parcel_data.weight_kg
+        weight_kg=parcel_data.weight_kg,
+        is_archived=parcel_data.is_archived,
     )
     db.add(parcel)
     await db.commit()

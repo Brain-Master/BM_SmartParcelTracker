@@ -14,6 +14,7 @@ class ParcelBase(BaseModel):
     status: ParcelStatus = ParcelStatus.Created
     tracking_updated_at: datetime | None = None
     weight_kg: Decimal | None = Field(None, ge=0, decimal_places=3)
+    is_archived: bool = False
 
 
 class ParcelCreate(ParcelBase):
@@ -28,6 +29,7 @@ class ParcelUpdate(BaseModel):
     status: ParcelStatus | None = None
     tracking_updated_at: datetime | None = None
     weight_kg: Decimal | None = Field(None, ge=0, decimal_places=3)
+    is_archived: bool | None = None
 
 
 class ParcelRead(ParcelBase):

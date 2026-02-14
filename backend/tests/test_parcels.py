@@ -101,3 +101,29 @@ async def test_list_parcels_unauthorized(client: AsyncClient):
     """Test listing parcels without authentication fails."""
     response = await client.get("/api/parcels/")
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_parcels_excludes_archived(client: AsyncClient, test_user_data, test_parcel_data):
+    """By default list does not return archived parcels."""
+    headers = await get_auth_headers(client, test_user_data)
+    create_response = await client.post("/api/parcels/", json=test_parcel_data, headers=headers)
+    parcel_id = create_response.json()["id"]
+    await client.put(f"/api/parcels/{parcel_id}", json={"is_archived": True}, headers=headers)
+    response = await client.get("/api/parcels/", headers=headers)
+    assert response.status_code == 200
+    assert len(response.json()) == 0
+
+
+@pytest.mark.asyncio
+async def test_list_parcels_include_archived(client: AsyncClient, test_user_data, test_parcel_data):
+    """With include_archived=true archived parcels are returned."""
+    headers = await get_auth_headers(client, test_user_data)
+    create_response = await client.post("/api/parcels/", json=test_parcel_data, headers=headers)
+    parcel_id = create_response.json()["id"]
+    await client.put(f"/api/parcels/{parcel_id}", json={"is_archived": True}, headers=headers)
+    response = await client.get("/api/parcels/?include_archived=true", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["is_archived"] is True

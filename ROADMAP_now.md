@@ -758,10 +758,14 @@ Task 1.1 → Task 1.2 → Task 2.2 → Task 2.3 (currency in OrderForm)
 - Tracking queue (Redis + Celery) — Iteration 2.2
 - Protection deadline alerts (email/push) — Iteration 2.2
 - Rate limiting (slowapi) — Iteration 2.2
+- Client cache + polling (обновление по запросу / раз в N мин) — см. Task 2.2.5
+- Режим массовой приёмки + локальный поиск (QR/barcode) — см. Task 2.2.6
 - PWA offline mode — Iteration 2.3
-- Barcode scanner — Iteration 2.3
+- Barcode scanner (UI) — Iteration 2.3
 - Frontend тесты (Vitest) — Iteration 2.3
 - Monitoring (Sentry, Prometheus) — Iteration 2.3
+
+**Бэклог (техдолг):** SSE для пуш-обновлений с сервера; PWA (offline, push-уведомления) — см. [ROADMAP_next-planned.md](./ROADMAP_next-planned.md) раздел «Backlog / Техдолг».
 
 **Следующий фокус:** См. Sprint 2.2 ниже
 
@@ -973,6 +977,48 @@ class Order(Base):
 
 ---
 
+### Task 2.2.5: Client cache и polling (обновление данных)
+
+**Цель:** Единый кеш списков (посылки, заказы) на клиенте и предсказуемое обновление данных без пушей с сервера.
+
+**Поведение:**
+- При загрузке экранов (дашборд, приёмка) — запрос к API, данные сохраняются в state/контексте (или общий store).
+- Обновление кеша: **по запросу** (кнопка «Обновить», pull-to-refresh), **при фокусе экрана** (опционально), **раз в N минут** (таймер, только когда приложение в foreground).
+- После мутаций (создание/редактирование/удаление, «принять посылку») — обновить кеш из ответа API или refetch соответствующего списка.
+- Синхронизация между устройствами: каждое устройство при следующем обновлении (по запросу или по таймеру) получает актуальные данные с сервера.
+
+**Изменения:**
+- Фронт: централизовать загрузку списков (parcels, orders с items), вынести refetch в общий слой; добавить кнопку «Обновить» и при необходимости pull-to-refresh; опционально — `setInterval` refetch (например, раз в 2–5 мин) при монтировании дашборда/страницы приёмки.
+- Документировать стратегию в коде или в System Design.
+
+**DoD:** Пользователь видит актуальные данные после нажатия «Обновить» или по истечении интервала; кеш используется для локального поиска (см. Task 2.2.6).
+
+---
+
+### Task 2.2.6: Режим локального поиска (QR/barcode) и массовая приёмка
+
+**Цель:** Поиск посылки по трек-номеру строго на клиенте (по кешу) и режим массовой приёмки с синхронизацией товаров.
+
+**1. Режим локального поиска на клиенте (QR/barcode):**
+- Сканирование штрихкода/QR камерой или по фото — декод на клиенте (библиотека `@zxing/browser` или `html5-qrcode`).
+- По полученной строке (tracking number) — поиск в уже загруженном кеше посылок (фильтр по `tracking_number`), без дополнительного запроса к API.
+- Результат: показ карточки посылки или переход к действию «принять».
+
+**2. Режим массовой приёмки:**
+- Кнопка «Приёмка» / «Режим приёмки» (телефон и ПК) → отдельная страница/экран.
+- Ввод трек-номера вручную (поле + Enter) или сканирование (камера / фото) → по кешу найти посылку → отметить как полученную.
+- Backend: endpoint «отметить посылку полученной» (например `POST /parcels/{id}/mark-received`): установка `parcel.status = Delivered`, при необходимости пересчёт по `parcel_items` и обновление у связанных `order_items` полей `quantity_received` и `item_status` (Received / Partially_Received).
+- В сессии приёмки — список «Принято в этой сессии» для обратной связи.
+
+**Изменения:**
+- Backend: `mark_parcel_received` в parcel_service (обновление посылки и связанных order_items); API `POST /parcels/{id}/mark-received` (и при необходимости bulk).
+- Frontend: страница «Приёмка» (например `/receive`), компонент сканера (камера + декод из фото), поле ручного ввода, поиск по кешу, вызов mark-received, список принятых в сессии.
+- Маршрут и кнопка входа в приёмку в навигации/дашборде.
+
+**DoD:** Пользователь может открыть режим приёмки, сканировать или ввести трек-номер, посылка находится по кешу и помечается полученной; товары в заказе синхронизируются (quantity_received, item_status).
+
+---
+
 ### Implementation Order (Mermaid Diagram)
 
 ```mermaid
@@ -982,6 +1028,8 @@ graph TD
     Start --> T2[Task 2.2.2: Multiple Views]
     Start --> T3[Task 2.2.3: Sorting/Archiving]
     Start --> T4[Task 2.2.4: Order Cost Formula]
+    Start --> T5[Task 2.2.5: Client cache and polling]
+    Start --> T6[Task 2.2.6: Local search and bulk receive]
     
     T1 --> T1A[Create ParcelItem model]
     T1A --> T1B[Migration 004]
@@ -999,10 +1047,19 @@ graph TD
     T4A --> T4B[Add computed properties]
     T4B --> T4C[Update UI]
     
+    T5 --> T5A[Centralize list fetch and refetch]
+    T5A --> T5B[Refresh on demand and optional interval]
+    
+    T6 --> T6A[Backend mark-received and item sync]
+    T6A --> T6B[Receive page and barcode scan]
+    T6B --> T6C[Search from cache and bulk accept]
+    
     T1D --> Done[Sprint 2.2 Complete]
     T2B --> Done
     T3C --> Done
     T4C --> Done
+    T5B --> Done
+    T6C --> Done
 ```
 
 ### Key Architectural Decisions
@@ -1020,6 +1077,8 @@ graph TD
 - [ ] Dashboard имеет 4 разных view (Orders, Parcels, Items, Status)
 - [ ] Пользователь может сортировать, удалять и архивировать заказы/посылки
 - [ ] Стоимость заказа отображается как breakdown (товары + доставка + пошлина)
+- [ ] Client cache + polling: обновление данных по запросу и опционально раз в N минут (Task 2.2.5)
+- [ ] Режим приёмки: локальный поиск по QR/barcode по кешу, массовая приёмка с синхронизацией товаров (Task 2.2.6)
 - [ ] Все изменения покрыты тестами (pytest для backend)
 - [ ] 0 linting ошибок (ruff, eslint)
 

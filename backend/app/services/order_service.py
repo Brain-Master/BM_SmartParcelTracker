@@ -45,17 +45,20 @@ async def get_order_by_id(db: AsyncSession, order_id: str, load_items: bool = Fa
 
 
 async def get_user_orders(
-    db: AsyncSession, 
-    user_id: str, 
-    skip: int = 0, 
+    db: AsyncSession,
+    user_id: str,
+    skip: int = 0,
     limit: int = 100,
     load_items: bool = False,
     exclude_deleted: bool = True,
+    include_archived: bool = False,
 ) -> list[Order]:
-    """Get all orders for a user. By default excludes soft-deleted (deleted_at IS NOT NULL)."""
+    """Get all orders for a user. By default excludes soft-deleted and archived."""
     query = select(Order).where(Order.user_id == user_id)
     if exclude_deleted:
         query = query.where(Order.deleted_at.is_(None))
+    if not include_archived:
+        query = query.where(Order.is_archived.is_(False))
     if load_items:
         query = query.options(selectinload(Order.order_items))
     query = query.offset(skip).limit(limit).order_by(Order.created_at.desc())

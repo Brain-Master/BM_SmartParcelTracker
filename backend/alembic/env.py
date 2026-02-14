@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy import pool
 
 from app.models.base import Base
-from app.models import *  # noqa: F401 — so all models are registered
+from app.models import *  # noqa: F401, F403 — so all models are registered
 
 config = context.config
 if config.config_file_name is not None:

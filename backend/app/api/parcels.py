@@ -16,12 +16,13 @@ async def list_parcels(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     include_items: bool = Query(False, description="Include order items in response"),
+    include_archived: bool = Query(False, description="Include archived parcels"),
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get all parcels for the current user."""
     parcels = await parcel_service.get_user_parcels(
-        db, str(current_user.id), skip, limit, load_items=include_items
+        db, str(current_user.id), skip, limit, load_items=include_items, include_archived=include_archived
     )
     return parcels
 

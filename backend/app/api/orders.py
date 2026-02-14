@@ -32,12 +32,13 @@ async def list_orders(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     include_items: bool = Query(False, description="Include order items in response"),
+    include_archived: bool = Query(False, description="Include archived orders"),
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get all orders for the current user. With include_items=True returns items enriched by parcel split (in_parcels, remaining_quantity)."""
     orders = await order_service.get_user_orders(
-        db, current_user.id, skip, limit, load_items=include_items
+        db, str(current_user.id), skip, limit, load_items=include_items, include_archived=include_archived
     )
     if not include_items or not orders:
         return list(orders)

@@ -21,6 +21,7 @@ class OrderBase(BaseModel):
     comment: str | None = None
     shipping_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
     customs_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
+    is_archived: bool = False
 
 
 class OrderCreate(BaseModel):
@@ -56,6 +57,7 @@ class OrderUpdate(BaseModel):
     comment: str | None = None
     shipping_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
     customs_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
+    is_archived: bool | None = None
 
 
 class OrderRead(OrderBase):
