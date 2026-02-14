@@ -30,7 +30,9 @@ export function SummaryCards({ rows }: SummaryCardsProps) {
 
   // Total sum of orders
   const totalSum = rows.reduce((sum, row) => {
-    return sum + (row.order?.price_final_base || 0);
+    const price = row.order?.price_final_base;
+    const numericPrice = typeof price === 'string' ? parseFloat(price) : (price || 0);
+    return sum + numericPrice;
   }, 0);
 
   const cards = [
