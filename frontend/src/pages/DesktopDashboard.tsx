@@ -45,7 +45,7 @@ export function DesktopDashboard() {
       </header>
 
       {loading && <LoadingSpinner />}
-      {error && <ErrorMessage message={error} onRetry={handleRetry} />}
+      {!loading && error && <ErrorMessage message={error} onRetry={handleRetry} />}
       {!loading && !error && <MasterTable rows={rows} />}
     </div>
   )
