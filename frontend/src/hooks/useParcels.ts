@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
-import { Parcel } from '../types';
+import { Parcel, OrderItem } from '../types';
 
-export function useParcels() {
-  const [parcels, setParcels] = useState<Parcel[]>([]);
+interface ParcelWithItems extends Parcel {
+  order_items?: OrderItem[];
+}
+
+export function useParcels(includeItems: boolean = false) {
+  const [parcels, setParcels] = useState<ParcelWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -11,7 +15,8 @@ export function useParcels() {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiClient.get<Parcel[]>('/parcels/');
+      const queryParam = includeItems ? '?include_items=true' : '';
+      const data = await apiClient.get<ParcelWithItems[]>(`/parcels/${queryParam}`);
       setParcels(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch parcels');
@@ -22,7 +27,8 @@ export function useParcels() {
 
   useEffect(() => {
     fetchParcels();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [includeItems]);
 
   const createParcel = async (parcelData: Partial<Parcel>): Promise<Parcel | null> => {
     try {

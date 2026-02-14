@@ -5,21 +5,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_active_user
 from app.models.user import User
-from app.schemas.parcel import ParcelCreate, ParcelRead, ParcelUpdate
+from app.schemas.parcel import ParcelCreate, ParcelRead, ParcelUpdate, ParcelWithItems
 from app.services import parcel_service
 
 router = APIRouter()
 
 
-@router.get("/", response_model=list[ParcelRead])
+@router.get("/", response_model=list[ParcelRead | ParcelWithItems])
 async def list_parcels(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
+    include_items: bool = Query(False, description="Include order items in response"),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get all parcels for the current user."""
-    parcels = await parcel_service.get_user_parcels(db, current_user.id, skip, limit)
+    parcels = await parcel_service.get_user_parcels(
+        db, str(current_user.id), skip, limit, load_items=include_items
+    )
     return parcels
 
 

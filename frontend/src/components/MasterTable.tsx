@@ -12,6 +12,7 @@ import {
 } from '@tanstack/react-table'
 import { useMemo, useState } from 'react'
 import type { ParcelRow } from '../types'
+import { buildFlatCsv, downloadCsv } from '../utils/exportCsv'
 
 const tagPill =
   'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200'
@@ -52,6 +53,12 @@ function ProtectionCell({ endDate }: { endDate: string | null }) {
 
 export function MasterTable({ rows }: { rows: ParcelRow[] }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+
+  const handleExportCsv = () => {
+    const csv = buildFlatCsv(rows);
+    const filename = `parcels-export-${new Date().toISOString().split('T')[0]}.csv`;
+    downloadCsv(csv, filename);
+  };
 
   const columns = useMemo<ColumnDef<ParcelRow>[]>(
     () => [
@@ -155,6 +162,7 @@ export function MasterTable({ rows }: { rows: ParcelRow[] }) {
         <span className="font-medium">Заказы и посылки</span>
         <button
           type="button"
+          onClick={handleExportCsv}
           aria-label="Скачать данные в формате CSV"
           className="rounded bg-slate-700 px-3 py-1.5 text-sm text-white hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500"
         >

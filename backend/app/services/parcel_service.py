@@ -25,16 +25,18 @@ async def get_user_parcels(
     db: AsyncSession, 
     user_id: str, 
     skip: int = 0, 
-    limit: int = 100
+    limit: int = 100,
+    load_items: bool = False
 ) -> list[Parcel]:
     """Get all parcels for a user."""
-    result = await db.execute(
-        select(Parcel)
-        .where(Parcel.user_id == user_id)
-        .offset(skip)
-        .limit(limit)
-        .order_by(Parcel.created_at.desc())
-    )
+    query = select(Parcel).where(Parcel.user_id == user_id)
+    
+    if load_items:
+        query = query.options(selectinload(Parcel.order_items))
+    
+    query = query.offset(skip).limit(limit).order_by(Parcel.created_at.desc())
+    
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 
