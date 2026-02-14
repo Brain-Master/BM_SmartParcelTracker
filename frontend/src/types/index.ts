@@ -60,9 +60,16 @@ export interface OrderItem {
   item_status: OrderItemStatus
 }
 
-/** Row for Master Table: Parcel + items (grouping) */
+/** Row for Master Table: Parcel + items (grouping) — legacy */
 export interface ParcelRow {
   parcel: Parcel
   orderItems: OrderItem[]
   order?: Order
+}
+
+/** Row for new Order-centric Master Table */
+export interface OrderRow {
+  order: Order
+  items: OrderItem[]
+  parcels: Parcel[]
 }
