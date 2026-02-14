@@ -107,14 +107,16 @@
 
 ### Неделя 1: Auth UI + Protected Routes
 
-#### Task 1.1: Frontend Auth Pages (3 дня)
+#### Task 1.1: Frontend Auth Pages (3 дня) ✅ COMPLETED
 
 **Цель:** Создать login и register страницы.
 
+**Статус:** ✅ Реализовано 14.02.2026
+
 **Файлы:**
-- `frontend/src/pages/Login.tsx` (новый)
-- `frontend/src/pages/Register.tsx` (новый)
-- `frontend/src/App.tsx` (обновить routes)
+- `frontend/src/pages/Login.tsx` (новый) ✅
+- `frontend/src/pages/Register.tsx` (новый) ✅
+- `frontend/src/App.tsx` (обновить routes) ✅
 
 **Требования:**
 - Login форма: email, password, кнопка "Войти", ссылка "Зарегистрироваться"
@@ -496,12 +498,12 @@ function MasterTable({ rows }: { rows: ParcelRow[] }) {
 ## Definition of Done
 
 ### Task 1: Auth UI
-- [ ] Login страница работает (вход с существующим пользователем)
-- [ ] Register страница работает (создание нового пользователя)
-- [ ] При успешном входе редирект на `/`
-- [ ] При неуспешном входе показывается ошибка
-- [ ] Protected route редиректит на `/login` если не авторизован
-- [ ] Logout работает (очистка token, редирект на login)
+- [x] Login страница работает (вход с существующим пользователем) ✅
+- [x] Register страница работает (создание нового пользователя) ✅
+- [x] При успешном входе редирект на `/` ✅
+- [x] При неуспешном входе показывается ошибка ✅
+- [ ] Protected route редиректит на `/login` если не авторизован (Task 1.2)
+- [ ] Logout работает (очистка token, редирект на login) - функция реализована в useAuth, UI кнопка pending
 
 ### Task 2: User Profile
 - [ ] `PUT /api/users/me` обновляет email и main_currency
