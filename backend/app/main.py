@@ -17,15 +17,20 @@ async def lifespan(app: FastAPI):
     yield
 
 
+_origins = settings.BACKEND_CORS_ORIGINS or [
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+
 app = FastAPI(
-    title=settings.app_name,
+    title=settings.PROJECT_NAME,
     version="0.1.0",
     lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,8 +1,9 @@
-"""Declarative base and common mixins."""
+"""Declarative base and common mixins. AsyncAttrs for lazy loading in async context."""
 from uuid import uuid4
 
 from sqlalchemy import DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -10,7 +11,7 @@ def gen_uuid() -> str:
     return str(uuid4())
 
 
-class Base(DeclarativeBase):
+class Base(AsyncAttrs, DeclarativeBase):
     pass
 
 

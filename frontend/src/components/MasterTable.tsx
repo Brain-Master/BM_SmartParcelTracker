@@ -8,6 +8,7 @@ import {
   getExpandedRowModel,
   useReactTable,
   type ColumnDef,
+  type ExpandedState,
 } from '@tanstack/react-table'
 import { useMemo, useState } from 'react'
 import type { ParcelRow } from '../types'
@@ -29,10 +30,15 @@ function TagsCell({ tags }: { tags: string[] }) {
 }
 
 function ProtectionCell({ endDate }: { endDate: string | null }) {
-  if (!endDate) return <span className="text-slate-400">—</span>
-  const days = Math.ceil(
-    (new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  )
+  /* eslint-disable react-hooks/purity -- days-left uses Date.now() intentionally */
+  const days = useMemo(() => {
+    if (!endDate) return null
+    return Math.ceil(
+      (new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    )
+  }, [endDate])
+  /* eslint-enable react-hooks/purity */
+  if (!endDate || days === null) return <span className="text-slate-400">—</span>
   const cn =
     days >= 10
       ? 'deadline-ok'
@@ -105,11 +111,17 @@ export function MasterTable({ rows }: { rows: ParcelRow[] }) {
     []
   )
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table API
   const table = useReactTable({
     data: rows,
     columns,
     state: { expanded },
-    onExpandedChange: setExpanded,
+    onExpandedChange: (updater) =>
+      setExpanded((prev) => {
+        const next: ExpandedState = typeof updater === 'function' ? updater(prev) : updater
+        if (typeof next === 'boolean') return next ? prev : {}
+        return next
+      }),
     getRowId: (row, index, parent) =>
       parent
         ? `sub-${row.parcel.id}-${row.orderItems[0]?.id ?? index}`

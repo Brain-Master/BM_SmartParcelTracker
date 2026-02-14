@@ -1,0 +1,199 @@
+﻿BM Smart Parcel Tracker — Iteration 1.1: Infrastructure Hardening
+Role: BM_DEV (Senior Architect)
+Date: 2023-10-27
+Status: Approved for Execution
+Этот документ содержит полный код для исправлений безопасности и архитектуры, выявленных в ходе аудита.
+📋 Task List
+1. Backend Dependencies: Обновить backend/requirements.txt (добавить критические либы).
+2. Container Security: Переписать backend/Dockerfile (Non-root user).
+3. Config Core: Создать backend/app/core/config.py (Pydantic Settings).
+4. Database Base: Создать backend/app/db/base.py (SQLAlchemy 2.0 Base).
+5. Log Update: Обновить docs/CURRENT_STEPS.md.
+1. Обновление зависимостей
+File: backend/requirements.txt
+Action: Полная замена содержимого.
+# BM Smart Parcel Tracker — Backend
+# Python 3.11+
+
+# Core Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9  # Required for file uploads (Vision API)
+
+# Database
+sqlalchemy[asyncio]>=2.0.25
+asyncpg>=0.29.0
+alembic>=1.13.0
+
+# Settings & Validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# External APIs & LLM
+httpx>=0.26.0
+google-generativeai>=0.4.0  # For Gemini Vision
+
+# Utils
+email-validator>=2.1.0
+
+# Optional: Celery + Redis (Commented until Phase 3)
+# celery[redis]>=5.3.0
+# redis>=5.0.0
+
+# Dev & Testing
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+ruff>=0.3.0  # High-performance linter
+
+2. Безопасность Docker контейнера
+File: backend/Dockerfile
+Action: Полная замена содержимого. Внедрение пользователя appuser.
+# BM Smart Parcel Tracker — Backend
+# Security Level: High (Non-root user)
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+   PYTHONDONTWRITEBYTECODE=1 \
+   PIP_NO_CACHE_DIR=off \
+   PIP_DISABLE_PIP_VERSION_CHECK=on \
+   PIP_DEFAULT_TIMEOUT=100
+
+WORKDIR /app
+
+# Install system dependencies (minimal)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+   libpq5 \
+   curl \
+   && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Create a non-root user
+RUN addgroup --system appgroup && adduser --system --group appuser
+
+# Copy application code
+COPY . .
+
+# Change ownership to non-root user
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
+
+# Default Env Vars (can be overridden)
+ENV DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/smart_parcel
+ENV REDIS_URL=redis://redis:6379/0
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+3. Централизованная конфигурация
+File: backend/app/core/config.py
+Action: Создать новый файл. Обеспечивает строгую типизацию переменных окружения.
+from typing import List, Union
+from pydantic import AnyHttpUrl, field_validator, PostgresDsn
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+   PROJECT_NAME: str = "BM Smart Parcel Tracker"
+   API_V1_STR: str = "/api/v1"
+   
+   # CORS
+   BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
+
+   @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+   def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+       if isinstance(v, str) and not v.startswith("["):
+           return [i.strip() for i in v.split(",")]
+       elif isinstance(v, (list, str)):
+           return v
+       raise ValueError(v)
+
+   # Database
+   DATABASE_URL: str
+   
+   # Redis
+   REDIS_URL: str = "redis://localhost:6379/0"
+
+   # External APIs
+   OPENAI_API_KEY: str | None = None
+   GEMINI_API_KEY: str | None = None
+   
+   model_config = SettingsConfigDict(
+       env_file=".env", 
+       case_sensitive=True,
+       extra="ignore"
+   )
+
+settings = Settings()
+
+4. Базовая модель SQLAlchemy
+File: backend/app/db/base.py
+Action: Создать новый файл. Реализует автоматические UUID и таймстампы.
+from datetime import datetime
+from typing import Any
+import uuid
+
+from sqlalchemy import TIMESTAMP, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, declared_attr
+from sqlalchemy.ext.asyncio import AsyncAttrs
+
+class Base(AsyncAttrs, DeclarativeBase):
+   """
+   Base class for all SQLAlchemy models.
+   Includes AsyncAttrs for lazy loading in async context.
+   """
+   
+   # Auto-generate __tablename__ from class name (e.g. 'User' -> 'user')
+   @declared_attr.directive
+   def __tablename__(cls) -> str:
+       return cls.__name__.lower()
+
+   # Common fields for all tables
+   id: Mapped[uuid.UUID] = mapped_column(
+       primary_key=True, 
+       default=uuid.uuid4,
+       sort_order=-1 # Ensure ID is always first column
+   )
+   
+   created_at: Mapped[datetime] = mapped_column(
+       TIMESTAMP(timezone=True), 
+       server_default=func.now(),
+       nullable=False
+   )
+   
+   updated_at: Mapped[datetime] = mapped_column(
+       TIMESTAMP(timezone=True), 
+       server_default=func.now(), 
+       onupdate=func.now(),
+       nullable=False
+   )
+
+5. Обновление лога разработки
+File: docs/CURRENT_STEPS.md
+Action: Обновить секцию логов.
+# Development Log - BM Smart Parcel Tracker
+
+## Session Info
+* **Role:** BM_DEV (Senior Architect)
+* **Date:** 2023-10-27 (Simulated)
+* **Status:** Phase 2 - Backend Core
+
+## Iteration Log
+
+### Iteration 1.1: Infrastructure Hardening
+* **Goal:** Secure Docker setup and fix dependency gaps.
+* **Changes:**
+   * [UPDATE] `backend/requirements.txt`: Added `python-multipart`, `ruff`, `google-generativeai`. Moved `httpx` to main.
+   * [UPDATE] `backend/Dockerfile`: Implemented non-root user `appuser` for security.
+   * [NEW] `backend/app/core/config.py`: Implemented Pydantic Settings for strict env validation.
+   * [NEW] `backend/app/db/base.py`: Created robust SQLAlchemy Base model with UUIDs and Timestamps.
+
+## Pending Tasks
+- [ ] Implement Core Models (`User`, `Order`, `Parcel`, `OrderItem`) in `app/models/`.
+- [ ] Create Pydantic Schemas (`app/schemas/`).
+- [ ] Setup initial Alembic migration.
