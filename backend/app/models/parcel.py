@@ -46,3 +46,4 @@ class Parcel(Base, TimestampMixin):
     user = relationship("User", back_populates="parcels")
     order = relationship("Order", back_populates="parcels")
     order_items = relationship("OrderItem", back_populates="parcel")
+    parcel_items = relationship("ParcelItem", back_populates="parcel", cascade="all, delete-orphan")

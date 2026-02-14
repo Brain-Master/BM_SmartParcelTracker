@@ -15,6 +15,7 @@ from app.api.parcels import router as parcels_router
 from app.api.users import router as users_router
 from app.api.order_items import router as order_items_router
 from app.api.currency import router as currency_router
+from app.api.parcel_items import router as parcel_items_router
 
 # Configure logging
 setup_logging()
@@ -49,6 +50,7 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(orders_router, prefix="/api/orders", tags=["orders"])
+app.include_router(parcel_items_router, prefix="/api/parcels")
 app.include_router(parcels_router, prefix="/api/parcels", tags=["parcels"])
 app.include_router(users_router, prefix="/api/users", tags=["users"])
 app.include_router(order_items_router, prefix="/api/order-items", tags=["order-items"])
@@ -71,8 +73,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
-    """Handle database errors."""
-    logger.error(f"Database error on {request.url}: {str(exc)}")
+    """Handle database errors. Log full traceback for debugging."""
+    logger.error("Database error on %s: %s", request.url, exc, exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={

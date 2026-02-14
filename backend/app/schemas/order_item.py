@@ -42,5 +42,20 @@ class OrderItemRead(OrderItemBase):
     parcel_id: str | None
     created_at: datetime
     updated_at: datetime
-    
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OrderItemInParcel(BaseModel):
+    """Quantity of this order item in one parcel (split shipments)."""
+    parcel_id: str
+    quantity: int = Field(..., ge=1)
+
+
+class OrderItemReadWithParcels(OrderItemRead):
+    """Order item with parcel split: in_parcels, quantity_in_parcels, remaining_quantity."""
+    in_parcels: list[OrderItemInParcel] = Field(default_factory=list)
+    quantity_in_parcels: int = Field(0, ge=0)
+    remaining_quantity: int = Field(0, ge=0)
+
     model_config = ConfigDict(from_attributes=True)

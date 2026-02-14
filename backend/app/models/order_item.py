@@ -42,3 +42,4 @@ class OrderItem(Base, TimestampMixin):
 
     order = relationship("Order", back_populates="order_items")
     parcel = relationship("Parcel", back_populates="order_items")
+    parcel_items = relationship("ParcelItem", back_populates="order_item", cascade="all, delete-orphan")

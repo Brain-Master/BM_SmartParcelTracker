@@ -16,6 +16,8 @@ class OrderBase(BaseModel):
     price_final_base: Decimal = Field(..., ge=0, decimal_places=2)
     is_price_estimated: bool = True
     comment: str | None = None
+    shipping_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
+    customs_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
 
 
 class OrderCreate(BaseModel):
@@ -30,6 +32,8 @@ class OrderCreate(BaseModel):
     price_final_base: Decimal | None = Field(None, ge=0, decimal_places=2)
     is_price_estimated: bool | None = None
     comment: str | None = None
+    shipping_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
+    customs_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
 
 
 class OrderUpdate(BaseModel):
@@ -44,25 +48,38 @@ class OrderUpdate(BaseModel):
     price_final_base: Decimal | None = Field(None, ge=0, decimal_places=2)
     is_price_estimated: bool | None = None
     comment: str | None = None
+    shipping_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
+    customs_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
 
 
 class OrderRead(OrderBase):
-    """Schema for reading order data (response)."""
+    """Schema for reading order data (response). total_order_cost omitted to avoid lazy-load in async."""
     id: str
     user_id: str
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class OrderWithItems(OrderRead):
-    """Order with related order items."""
+    """Order with related order items. total_order_cost = items + shipping + customs when loaded."""
     order_items: list["OrderItemRead"] = []
-    
+    total_order_cost: Decimal | None = None  # Set when order_items are loaded
+
     model_config = ConfigDict(from_attributes=True)
 
 
-# Forward reference for OrderItemRead
-from app.schemas.order_item import OrderItemRead  # noqa: E402
+# Forward reference for OrderItemRead and OrderItemReadWithParcels
+from app.schemas.order_item import OrderItemRead, OrderItemReadWithParcels  # noqa: E402
+
+
+class OrderWithItemsEnriched(OrderRead):
+    """Order with order items enriched by parcel split (in_parcels, remaining_quantity)."""
+    order_items: list[OrderItemReadWithParcels] = []
+    total_order_cost: Decimal | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 OrderWithItems.model_rebuild()

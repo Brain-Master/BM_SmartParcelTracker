@@ -5,6 +5,7 @@ from app.models.user import User
 from app.models.order import Order
 from app.models.parcel import Parcel
 from app.models.order_item import OrderItem
+from app.models.parcel_item import ParcelItem
 
 __all__ = [
     "Base",
@@ -15,4 +16,5 @@ __all__ = [
     "Order",
     "Parcel",
     "OrderItem",
+    "ParcelItem",
 ]

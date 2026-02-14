@@ -49,6 +49,12 @@ export interface Parcel {
   weight_kg: number | null
 }
 
+/** Quantity of an order item in one parcel (split shipments). */
+export interface OrderItemInParcel {
+  parcel_id: string
+  quantity: number
+}
+
 export interface OrderItem {
   id: string
   order_id: string
@@ -60,6 +66,18 @@ export interface OrderItem {
   quantity_received: number
   item_status: OrderItemStatus
   price_per_item?: number | null
+  /** Filled when orders loaded with include_items: split per parcel. */
+  in_parcels?: OrderItemInParcel[]
+  quantity_in_parcels?: number
+  remaining_quantity?: number
+}
+
+/** ParcelItem API: order item in a parcel with quantity. */
+export interface ParcelItem {
+  id: string
+  parcel_id: string
+  order_item_id: string
+  quantity: number
 }
 
 /** Row for Master Table: Parcel + items (grouping) — legacy */

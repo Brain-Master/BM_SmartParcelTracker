@@ -2,63 +2,72 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useParcels } from '../hooks/useParcels';
 import { useOrders } from '../hooks/useOrders';
-import { useOrderItems } from '../hooks/useOrderItems';
+import { useParcelItems } from '../hooks/useParcelItems';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import type { ParcelStatus, OrderItem } from '../types';
+
+type OrderWithItems = { id: string; platform: string; order_number_external: string; order_items?: OrderItem[] };
 
 export function ParcelForm() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { parcels, createParcel, updateParcel, loading } = useParcels();
-  const { orders } = useOrders(true); // include items
-  const { updateItem } = useOrderItems();
+  const { orders } = useOrders(true);
+  const { list: listParcelItems, create: createParcelItem, update: updateParcelItem, remove: removeParcelItem, error: parcelItemsError } = useParcelItems();
 
   const isEditMode = !!id;
   const existingParcel = isEditMode ? parcels.find(p => p.id === id) : null;
 
-  // Form state
   const [trackingNumber, setTrackingNumber] = useState('');
   const [carrierSlug, setCarrierSlug] = useState('');
   const [status, setStatus] = useState<ParcelStatus>('Created');
   const [weightKg, setWeightKg] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
 
-  // Items to link to this parcel
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [itemQuantities, setItemQuantities] = useState<Map<string, number>>(new Map());
+  const [currentParcelItems, setCurrentParcelItems] = useState<Map<string, { id: string; quantity: number }>>(new Map());
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Collect all items from orders: unlinked (no parcel_id) + items already linked to this parcel
+  // Items available to add: from (selected order or all) where remaining_quantity > 0 OR already in this parcel (when editing)
   const availableItems = useMemo(() => {
     const items: (OrderItem & { orderPlatform: string; orderNumber: string })[] = [];
-    for (const order of orders) {
-      const orderWithItems = order as unknown as { order_items?: Array<Record<string, unknown>> };
-      if (orderWithItems.order_items) {
-        for (const raw of orderWithItems.order_items) {
-          const parcelId = raw.parcel_id as string | null;
-          // Show items that are unlinked OR linked to current parcel
-          if (!parcelId || (isEditMode && parcelId === id)) {
-            items.push({
-              id: raw.id as string,
-              order_id: raw.order_id as string,
-              parcel_id: parcelId,
-              item_name: raw.item_name as string,
-              image_url: raw.image_url as string | null,
-              tags: (raw.tags as string[]) || [],
-              quantity_ordered: raw.quantity_ordered as number,
-              quantity_received: raw.quantity_received as number,
-              item_status: raw.item_status as OrderItem['item_status'],
-              orderPlatform: order.platform || '?',
-              orderNumber: order.order_number_external || '?',
-            });
-          }
+    const orderList = orders as OrderWithItems[];
+    for (const order of orderList) {
+      if (selectedOrderId && order.id !== selectedOrderId) continue;
+      const orderItems = order.order_items ?? [];
+      for (const raw of orderItems) {
+        const remaining = raw.remaining_quantity ?? (raw.quantity_ordered - (raw.quantity_in_parcels ?? 0));
+        const inThisParcel = isEditMode && id && (raw.in_parcels?.some(p => p.parcel_id === id) ?? false);
+        if (remaining > 0 || inThisParcel) {
+          items.push({
+            ...raw,
+            orderPlatform: order.platform || '?',
+            orderNumber: order.order_number_external || '?',
+          });
         }
       }
     }
     return items;
-  }, [orders, isEditMode, id]);
+  }, [orders, selectedOrderId, isEditMode, id]);
+
+  // Load existing parcel items when editing
+  useEffect(() => {
+    if (!isEditMode || !id) return;
+    let cancelled = false;
+    listParcelItems(id).then((list) => {
+      if (cancelled) return;
+      const map = new Map<string, { id: string; quantity: number }>();
+      for (const pi of list) {
+        map.set(pi.order_item_id, { id: pi.id, quantity: pi.quantity });
+      }
+      setCurrentParcelItems(map);
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, id]);
 
   useEffect(() => {
     if (existingParcel && isEditMode) {
@@ -67,37 +76,42 @@ export function ParcelForm() {
       setStatus(existingParcel.status);
       setWeightKg(existingParcel.weight_kg?.toString() || '');
       setSelectedOrderId(existingParcel.order_id || '');
-      // Pre-select items already linked to this parcel
-      const linkedItems = availableItems.filter(i => i.parcel_id === id);
-      const linked = new Set(linkedItems.map(i => i.id));
-      setSelectedItemIds(linked);
-      // Initialize quantities from quantity_received
-      const quantities = new Map<string, number>();
-      for (const item of linkedItems) {
-        quantities.set(item.id, item.quantity_received || item.quantity_ordered);
-      }
-      setItemQuantities(quantities);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existingParcel, isEditMode, availableItems]);
+  }, [existingParcel, isEditMode]);
+
+  // Pre-select items and quantities from current parcel items (after they're loaded)
+  useEffect(() => {
+    if (!isEditMode || !id || currentParcelItems.size === 0) return;
+    const linked = new Set<string>();
+    const quantities = new Map<string, number>();
+    for (const [orderItemId, { quantity }] of currentParcelItems) {
+      linked.add(orderItemId);
+      quantities.set(orderItemId, quantity);
+    }
+    setSelectedItemIds(linked);
+    setItemQuantities(quantities);
+  }, [isEditMode, id, currentParcelItems]);
+
+  const quantityInThisParcel = (item: OrderItem): number =>
+    Number((id && item.in_parcels?.find(p => p.parcel_id === id)?.quantity) ?? 0);
+
+  const maxQuantityForItem = (item: OrderItem) => {
+    const remaining = Number(item.remaining_quantity ?? item.quantity_ordered);
+    return quantityInThisParcel(item) + remaining;
+  };
 
   const toggleItem = (itemId: string) => {
     setSelectedItemIds(prev => {
       const next = new Set(prev);
       if (next.has(itemId)) {
         next.delete(itemId);
-        // Remove quantity
-        setItemQuantities(q => {
-          const newQ = new Map(q);
-          newQ.delete(itemId);
-          return newQ;
-        });
+        setItemQuantities(q => { const m = new Map(q); m.delete(itemId); return m; });
       } else {
-        next.add(itemId);
-        // Initialize quantity to quantity_ordered
         const item = availableItems.find(i => i.id === itemId);
         if (item) {
-          setItemQuantities(q => new Map(q).set(itemId, item.quantity_ordered));
+          next.add(itemId);
+          const defaultQty = Math.min(1, maxQuantityForItem(item));
+          setItemQuantities(q => new Map(q).set(itemId, defaultQty));
         }
       }
       return next;
@@ -122,33 +136,59 @@ export function ParcelForm() {
     };
 
     try {
-      let parcelResult;
+      let parcelId: string;
       if (isEditMode) {
-        parcelResult = await updateParcel(id, parcelData);
+        const updated = await updateParcel(id, parcelData);
+        if (!updated) {
+          setError('Не удалось сохранить посылку');
+          setSubmitting(false);
+          return;
+        }
+        parcelId = updated.id;
       } else {
-        parcelResult = await createParcel(parcelData);
+        const created = await createParcel(parcelData);
+        if (!created) {
+          setError('Не удалось сохранить посылку');
+          setSubmitting(false);
+          return;
+        }
+        parcelId = created.id;
       }
 
-      if (parcelResult) {
-        // Link selected items to this parcel and set quantities
-        for (const item of availableItems) {
-          if (selectedItemIds.has(item.id) && item.parcel_id !== parcelResult.id) {
-            const quantity = itemQuantities.get(item.id) || item.quantity_ordered;
-            await updateItem(item.id, { 
-              parcel_id: parcelResult.id,
-              quantity_received: quantity 
-            });
-          } else if (!selectedItemIds.has(item.id) && item.parcel_id === parcelResult.id) {
-            await updateItem(item.id, { 
-              parcel_id: null,
-              quantity_received: 0 
-            });
+      // Sync parcel items via ParcelItem API (split shipments)
+      for (const item of availableItems) {
+        const wantedQty = selectedItemIds.has(item.id) ? (itemQuantities.get(item.id) ?? 1) : 0;
+        const existing = currentParcelItems.get(item.id);
+
+        if (wantedQty > 0) {
+          if (existing) {
+            if (existing.quantity !== wantedQty) {
+              const { item: updated, error: updateErr } = await updateParcelItem(parcelId, existing.id, { quantity: wantedQty });
+              if (!updated || updateErr) {
+                setError(updateErr || parcelItemsError || 'Не удалось обновить количество (возможно, превышен заказ)');
+                setSubmitting(false);
+                return;
+              }
+            }
+          } else {
+            const { item: created, error: createErr } = await createParcelItem(parcelId, { order_item_id: item.id, quantity: wantedQty });
+            if (!created || createErr) {
+              setError(createErr || parcelItemsError || 'Не удалось добавить товар (проверьте остаток по заказу)');
+              setSubmitting(false);
+              return;
+            }
+          }
+        } else if (existing) {
+          const { ok: removed, error: removeErr } = await removeParcelItem(parcelId, existing.id);
+          if (!removed || removeErr) {
+            setError(removeErr || parcelItemsError || 'Не удалось убрать товар из посылки');
+            setSubmitting(false);
+            return;
           }
         }
-        navigate('/');
-      } else {
-        setError('Не удалось сохранить посылку');
       }
+
+      navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка при сохранении');
     } finally {
@@ -207,7 +247,6 @@ export function ParcelForm() {
             <input type="number" id="weight" step="0.01" min="0" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" placeholder="Опционально" />
           </div>
 
-          {/* Link to order */}
           <div>
             <label htmlFor="orderId" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Привязать к заказу</label>
             <select id="orderId" value={selectedOrderId} onChange={(e) => setSelectedOrderId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100">
@@ -218,19 +257,19 @@ export function ParcelForm() {
             </select>
           </div>
 
-          {/* Link items to this parcel */}
           {availableItems.length > 0 && (
             <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
               <h3 className="text-lg font-medium text-slate-800 dark:text-slate-200 mb-3">
                 Привязать товары к посылке
               </h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                Выберите товары из заказов, которые находятся в этой посылке:
+                Выберите товары и укажите количество в этой посылке (остаток можно привязать к другой посылке):
               </p>
               <div className="space-y-2">
                 {availableItems.map(item => {
                   const isSelected = selectedItemIds.has(item.id);
-                  const quantity = itemQuantities.get(item.id) || item.quantity_ordered;
+                  const quantity = itemQuantities.get(item.id) ?? 1;
+                  const maxQty = maxQuantityForItem(item);
                   return (
                     <div key={item.id} className="p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-700/30">
                       <label className="flex items-center gap-3 cursor-pointer">
@@ -243,20 +282,24 @@ export function ParcelForm() {
                         <div className="flex-1 text-sm">
                           <span className="text-slate-700 dark:text-slate-300">{item.item_name}</span>
                           <span className="text-slate-400 ml-2">заказано: {item.quantity_ordered}</span>
+                          {(item.remaining_quantity ?? item.quantity_ordered) < item.quantity_ordered && (
+                            <span className="text-slate-500 ml-1">(остаток: {item.remaining_quantity ?? 0})</span>
+                          )}
                         </div>
                         <span className="text-xs text-slate-400">{item.orderPlatform} #{item.orderNumber}</span>
                       </label>
                       {isSelected && (
                         <div className="ml-8 mt-2 flex items-center gap-2">
-                          <label className="text-xs text-slate-500">Кол-во в посылке:</label>
+                          <label className="text-xs text-slate-500">Кол-во в этой посылке:</label>
                           <input
                             type="number"
-                            min="1"
-                            max={item.quantity_ordered}
+                            min={1}
+                            max={maxQty}
                             value={quantity}
-                            onChange={(e) => updateItemQuantity(item.id, parseInt(e.target.value) || 1)}
+                            onChange={(e) => updateItemQuantity(item.id, Math.min(maxQty, Math.max(1, parseInt(e.target.value) || 1)))}
                             className="w-20 px-2 py-1 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100"
                           />
+                          <span className="text-xs text-slate-400">макс. {maxQty}</span>
                         </div>
                       )}
                     </div>

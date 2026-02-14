@@ -13,8 +13,8 @@ import type { OrderRow, Order, OrderItem, Parcel } from '../types'
 
 export function DesktopDashboard() {
   const navigate = useNavigate()
-  const { user } = useCurrentUser()
-  const { parcels, loading: parcelsLoading, error: parcelsError, refetch: refetchParcels } = useParcels()
+  useCurrentUser()
+  const { parcels, loading: parcelsLoading, error: parcelsError, refetch: refetchParcels, deleteParcel } = useParcels()
   const { orders, loading: ordersLoading, error: ordersError, refetch: refetchOrders } = useOrders(true)
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({})
 
@@ -38,14 +38,20 @@ export function DesktopDashboard() {
         quantity_received: raw.quantity_received as number,
         item_status: raw.item_status as OrderItem['item_status'],
         price_per_item: raw.price_per_item as number | null | undefined,
+        in_parcels: raw.in_parcels as OrderItem['in_parcels'],
+        quantity_in_parcels: raw.quantity_in_parcels as number | undefined,
+        remaining_quantity: raw.remaining_quantity as number | undefined,
       }))
-      // Parcels linked via items' parcel_id
-      const linkedParcelIds = new Set(items.map(i => i.parcel_id).filter(Boolean) as string[])
-      // Also include parcels linked directly via parcel.order_id
-      for (const p of parcels) {
-        if (p.order_id === order.id) {
-          linkedParcelIds.add(p.id)
+      // Parcels linked via items' in_parcels (split) or parcel_id (legacy), and parcel.order_id
+      const linkedParcelIds = new Set<string>()
+      for (const i of items) {
+        if (i.parcel_id) linkedParcelIds.add(i.parcel_id)
+        for (const ip of i.in_parcels ?? []) {
+          linkedParcelIds.add(ip.parcel_id)
         }
+      }
+      for (const p of parcels) {
+        if (p.order_id === order.id) linkedParcelIds.add(p.id)
       }
       const linkedParcels = Array.from(linkedParcelIds).map(pid => parcelMap.get(pid)).filter(Boolean) as Parcel[]
 
@@ -80,6 +86,15 @@ export function DesktopDashboard() {
 
   const toggleOrder = (orderId: string) => {
     setExpandedOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }))
+  }
+
+  const handleDeleteParcel = async (parcelId: string) => {
+    if (!window.confirm('Удалить посылку? Привязки товаров к ней будут сняты.')) return
+    const ok = await deleteParcel(parcelId)
+    if (ok) {
+      refetchParcels()
+      refetchOrders()
+    }
   }
 
   const collapseAll = () => setExpandedOrders({})
@@ -268,12 +283,15 @@ export function DesktopDashboard() {
                     {row.items.length > 0 ? (
                       <div className="ml-8 space-y-1">
                         <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide pt-1">Товары</p>
-                        {row.items.map(item => (
-                          <div key={item.id} className="flex items-center gap-3 py-1 text-sm">
+                        {row.items.map(item => {
+                          const inParcels = item.in_parcels && item.in_parcels.length > 0
+                          const qtyDisplay = item.quantity_in_parcels != null
+                            ? `${item.quantity_in_parcels}/${item.quantity_ordered}`
+                            : `${item.quantity_received}/${item.quantity_ordered}`
+                          return (
+                          <div key={item.id} className="flex items-center gap-3 py-1 text-sm flex-wrap">
                             <span className="text-slate-700 dark:text-slate-300">{item.item_name}</span>
-                            <span className="text-slate-400">
-                              {item.quantity_received}/{item.quantity_ordered}
-                            </span>
+                            <span className="text-slate-400">{qtyDisplay}</span>
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
                               item.item_status === 'Received' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                               item.item_status === 'Shipped' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
@@ -282,7 +300,15 @@ export function DesktopDashboard() {
                             }`}>
                               {item.item_status.replace('_', ' ')}
                             </span>
-                            {item.parcel_id && (
+                            {inParcels ? (
+                              <span className="text-xs text-slate-400">
+                                {item.in_parcels!.map(ip => (
+                                  <span key={ip.parcel_id} className="mr-1">
+                                    📦 {parcels.find(p => p.id === ip.parcel_id)?.tracking_number ?? ip.parcel_id.slice(0, 8)} ({ip.quantity})
+                                  </span>
+                                ))}
+                              </span>
+                            ) : item.parcel_id && (
                               <span className="text-xs text-slate-400">
                                 📦 {parcels.find(p => p.id === item.parcel_id)?.tracking_number || '—'}
                               </span>
@@ -293,7 +319,8 @@ export function DesktopDashboard() {
                               </span>
                             ))}
                           </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     ) : (
                       <p className="ml-8 text-sm text-slate-400 py-1">Нет товаров. Добавьте товары в заказ.</p>
@@ -303,20 +330,55 @@ export function DesktopDashboard() {
                     {row.parcels.length > 0 && (
                       <div className="ml-8 mt-2 space-y-1">
                         <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Посылки</p>
-                        {row.parcels.map(parcel => (
-                          <div key={parcel.id} className="flex items-center gap-3 py-1 text-sm">
-                            <span className="text-slate-700 dark:text-slate-300">{parcel.tracking_number}</span>
-                            <span className="text-slate-500">{parcel.carrier_slug}</span>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              parcel.status === 'Delivered' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                              parcel.status === 'In_Transit' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                              parcel.status === 'Lost' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                              'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
-                            }`}>
-                              {parcel.status.replace('_', ' ')}
-                            </span>
-                          </div>
-                        ))}
+                        {row.parcels.map(parcel => {
+                          const itemsInParcel = row.items.filter(
+                            i => i.in_parcels?.some(ip => ip.parcel_id === parcel.id)
+                          ).map(i => {
+                            const qty = i.in_parcels?.find(ip => ip.parcel_id === parcel.id)?.quantity ?? 0
+                            return { name: i.item_name, quantity: qty }
+                          })
+                          return (
+                            <div key={parcel.id} className="flex items-start gap-3 py-2 text-sm border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-slate-700 dark:text-slate-300 font-medium">{parcel.tracking_number}</span>
+                                  <span className="text-slate-500">{parcel.carrier_slug}</span>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    parcel.status === 'Delivered' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                    parcel.status === 'In_Transit' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                    parcel.status === 'Lost' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                    'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+                                  }`}>
+                                    {parcel.status.replace('_', ' ')}
+                                  </span>
+                                </div>
+                                {itemsInParcel.length > 0 ? (
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    В посылке: {itemsInParcel.map(x => `${x.name} (${x.quantity})`).join(', ')}
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-slate-400 mt-1">Нет привязанных товаров</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); navigate(`/parcels/${parcel.id}/edit`) }}
+                                  className="px-2 py-1 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                                >
+                                  Ред.
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteParcel(parcel.id) }}
+                                  className="px-2 py-1 text-xs text-red-600 hover:text-red-800 dark:text-red-400"
+                                >
+                                  Удалить
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
@@ -347,10 +409,18 @@ export function DesktopDashboard() {
                     </span>
                   </div>
                   <button
+                    type="button"
                     onClick={() => navigate(`/parcels/${parcel.id}/edit`)}
                     className="px-2 py-1 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400"
                   >
                     Ред.
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteParcel(parcel.id)}
+                    className="px-2 py-1 text-xs text-red-600 hover:text-red-800 dark:text-red-400"
+                  >
+                    Удалить
                   </button>
                 </div>
               ))}

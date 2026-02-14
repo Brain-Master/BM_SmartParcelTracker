@@ -3,6 +3,7 @@ from app.schemas.user import UserCreate, UserRead, UserUpdate, UserInDB
 from app.schemas.order import OrderCreate, OrderRead, OrderUpdate, OrderWithItems
 from app.schemas.parcel import ParcelCreate, ParcelRead, ParcelUpdate, ParcelWithItems
 from app.schemas.order_item import OrderItemCreate, OrderItemRead, OrderItemUpdate
+from app.schemas.parcel_item import ParcelItemCreate, ParcelItemRead, ParcelItemUpdate
 
 __all__ = [
     # User schemas
@@ -24,4 +25,7 @@ __all__ = [
     "OrderItemCreate",
     "OrderItemRead",
     "OrderItemUpdate",
+    "ParcelItemCreate",
+    "ParcelItemRead",
+    "ParcelItemUpdate",
 ]

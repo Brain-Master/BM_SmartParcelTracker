@@ -85,6 +85,8 @@ export function OrderForm() {
         quantity_received: raw.quantity_received as number,
         item_status: raw.item_status as OrderItem['item_status'],
         price_per_item: raw.price_per_item as number | null | undefined,
+        in_parcels: raw.in_parcels as OrderItem['in_parcels'],
+        quantity_in_parcels: raw.quantity_in_parcels as number | undefined,
       }));
       setExistingItems(items);
     }
@@ -204,7 +206,7 @@ export function OrderForm() {
         // Create items for new order
         if (!isEditMode && newItems.length > 0) {
           for (const item of newItems) {
-            const created = await createItem({
+            await createItem({
               order_id: result.id,
               item_name: item.item_name,
               quantity_ordered: item.quantity_ordered,
@@ -215,7 +217,7 @@ export function OrderForm() {
         // Also create new items added in edit mode
         if (isEditMode && newItems.length > 0) {
           for (const item of newItems) {
-            const created = await createItem({
+            await createItem({
               order_id: id,
               item_name: item.item_name,
               quantity_ordered: item.quantity_ordered,
@@ -331,21 +333,35 @@ export function OrderForm() {
             <h3 className="text-lg font-medium text-slate-800 dark:text-slate-200 mb-3">Товары</h3>
 
             {/* Existing items (edit mode) */}
-            {existingItems.map(item => (
-              <div key={item.id} className="flex items-center gap-2 mb-2 p-2 bg-slate-50 dark:bg-slate-900 rounded">
-                <span className="flex-1 text-sm text-slate-700 dark:text-slate-300">{item.item_name}</span>
-                <span className="text-sm text-slate-500">x{item.quantity_ordered}</span>
+            {existingItems.map(item => {
+              const qtyDisplay = item.quantity_in_parcels != null
+                ? `${item.quantity_in_parcels}/${item.quantity_ordered}`
+                : `${item.quantity_received}/${item.quantity_ordered}`;
+              const hasParcels = item.in_parcels && item.in_parcels.length > 0;
+              return (
+              <div key={item.id} className="flex items-center gap-2 mb-2 p-2 bg-slate-50 dark:bg-slate-900 rounded flex-wrap">
+                <span className="flex-1 text-sm text-slate-700 dark:text-slate-300 min-w-0">{item.item_name}</span>
+                <span className="text-sm text-slate-500">{qtyDisplay}</span>
                 {item.price_per_item != null && (
                   <span className="text-sm text-slate-500">{Number(item.price_per_item).toFixed(2)}</span>
                 )}
-                {item.parcel_id && (
+                {hasParcels ? (
+                  <span className="text-xs text-blue-600 dark:text-blue-400">
+                    {item.in_parcels!.map(ip => (
+                      <span key={ip.parcel_id} className="mr-1">
+                        📦 {allParcels.find(p => p.id === ip.parcel_id)?.tracking_number ?? ip.parcel_id.slice(0, 8)} ({ip.quantity})
+                      </span>
+                    ))}
+                  </span>
+                ) : item.parcel_id && (
                   <span className="text-xs text-blue-600 dark:text-blue-400">
                     📦 {allParcels.find(p => p.id === item.parcel_id)?.tracking_number || '—'}
                   </span>
                 )}
                 <button type="button" onClick={() => removeExistingItem(item.id)} className="text-red-500 hover:text-red-700 text-sm">✕</button>
               </div>
-            ))}
+              );
+            })}
 
             {/* New items to add */}
             {newItems.map((item, i) => (

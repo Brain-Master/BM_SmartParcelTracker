@@ -37,6 +37,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    volumes:
+      # Mount code so migrations and reload use current files (no rebuild needed)
+      - ./backend:/app
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/smart_parcel
       REDIS_URL: redis://redis:6379/0

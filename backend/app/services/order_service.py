@@ -101,7 +101,9 @@ async def create_order(
         exchange_rate_frozen=exchange_rate_frozen,
         price_final_base=price_final_base,
         is_price_estimated=is_price_estimated,
-        comment=order_data.comment
+        comment=order_data.comment,
+        shipping_cost=order_data.shipping_cost,
+        customs_cost=order_data.customs_cost,
     )
     db.add(order)
     await db.commit()

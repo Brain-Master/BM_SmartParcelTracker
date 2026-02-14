@@ -19,8 +19,11 @@
 
 ## Quick start
 1. **DB + Redis + Backend:** `docker compose up -d` then open http://localhost:8000/docs  
-2. **Backend only (local venv):** `cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload` (set `DATABASE_URL` to local Postgres)  
-3. **Frontend:** `cd frontend && npm install && npm run dev` → http://localhost:5173  
+2. **Apply DB migrations (required after clone or pull):**  
+   - With Docker: `docker compose run --rm backend alembic upgrade head`  
+   - Local: `cd backend && set DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/smart_parcel && alembic upgrade head` (or use your `.env`)  
+3. **Backend only (local venv):** `cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload` (set `DATABASE_URL` to local Postgres)  
+4. **Frontend:** `cd frontend && npm install && npm run dev` → http://localhost:5173  
 
 ## Design doc
 See `docs/SYSTEM_DESIGN_AUDIT.md` for architect & QA notes aligned with the internal System Design Document.
