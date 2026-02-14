@@ -27,6 +27,7 @@ class Order(Base, TimestampMixin):
     )
     platform: Mapped[str] = mapped_column(String(64), nullable=False)  # AliExpress, Ozon, Amazon
     order_number_external: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    label: Mapped[str | None] = mapped_column(String(128), nullable=True)  # Human-readable name
     order_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     protection_end_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -43,10 +44,14 @@ class Order(Base, TimestampMixin):
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     shipping_cost: Mapped[Decimal | None] = mapped_column(NUMERIC(10, 2), nullable=True)
     customs_cost: Mapped[Decimal | None] = mapped_column(NUMERIC(10, 2), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
 
     user = relationship("User", back_populates="orders")
     order_items = relationship("OrderItem", back_populates="order")
-    parcels = relationship("Parcel", back_populates="order")
 
     @property
     def total_items_cost(self) -> Decimal:

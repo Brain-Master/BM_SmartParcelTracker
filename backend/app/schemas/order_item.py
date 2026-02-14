@@ -14,7 +14,12 @@ class OrderItemBase(BaseModel):
     quantity_ordered: int = Field(1, ge=1)
     quantity_received: int = Field(0, ge=0)
     price_per_item: Decimal | None = Field(None, ge=0, decimal_places=2)
-    item_status: OrderItemStatus = OrderItemStatus.Waiting_Shipment
+    item_status: OrderItemStatus = OrderItemStatus.Seller_Packing
+
+
+class OrderItemCreateNested(OrderItemBase):
+    """Schema for creating an order item inline with order (no order_id)."""
+    parcel_id: str | None = None
 
 
 class OrderItemCreate(OrderItemBase):
@@ -42,6 +47,13 @@ class OrderItemRead(OrderItemBase):
     parcel_id: str | None
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OrderItemReadWithOrderDeleted(OrderItemRead):
+    """Order item with order deleted flag (for parcel content when order is soft-deleted)."""
+    order_deleted_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

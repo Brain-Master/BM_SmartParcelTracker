@@ -4,7 +4,10 @@ import { useOrders } from '../hooks/useOrders';
 import { useCurrentUser } from '../hooks/useUsers';
 import { useOrderItems } from '../hooks/useOrderItems';
 import { useParcels } from '../hooks/useParcels';
+import { useStores } from '../hooks/useStores';
 import { apiClient } from '../api/client';
+import { getVisibleCurrencyOptions, CURRENCY_LABELS } from '../utils/currencyVisibility';
+import { getAvailableStoresForForm } from '../utils/defaultStores';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import type { OrderItem, Parcel } from '../types';
 
@@ -21,6 +24,9 @@ export function OrderForm() {
   const { user } = useCurrentUser();
   const { createItem, deleteItem } = useOrderItems();
   const { parcels } = useParcels();
+  const { stores } = useStores();
+  const availableStores = getAvailableStoresForForm(stores);
+  const visibleCurrencies = getVisibleCurrencyOptions();
 
   const isEditMode = !!id;
   const existingOrder = isEditMode ? orders.find(o => o.id === id) : null;
@@ -28,9 +34,11 @@ export function OrderForm() {
   // Form state
   const [platform, setPlatform] = useState('');
   const [orderNumberExternal, setOrderNumberExternal] = useState('');
+  const [label, setLabel] = useState('');
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0]);
   const [protectionEndDate, setProtectionEndDate] = useState('');
-  const [priceOriginal, setPriceOriginal] = useState('');
+  const [shippingCost, setShippingCost] = useState('');
+  const [customsCost, setCustomsCost] = useState('');
   const [currencyOriginal, setCurrencyOriginal] = useState('');
   const [exchangeRate, setExchangeRate] = useState('');
   const [comment, setComment] = useState('');
@@ -48,21 +56,26 @@ export function OrderForm() {
   const [fetchingRate, setFetchingRate] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Set default currency from user profile
+  // Set default currency from user profile (только если валюта в списке видимых из Настроек)
   useEffect(() => {
-    if (user && !currencyOriginal && !isEditMode) {
-      setCurrencyOriginal(user.main_currency);
+    if (user && !currencyOriginal && !isEditMode && visibleCurrencies.length > 0) {
+      const defaultCur = visibleCurrencies.includes(user.main_currency)
+        ? user.main_currency
+        : visibleCurrencies[0];
+      setCurrencyOriginal(defaultCur);
     }
-  }, [user, currencyOriginal, isEditMode]);
+  }, [user, currencyOriginal, isEditMode, visibleCurrencies]);
 
   // Initialize form with existing order data in edit mode
   useEffect(() => {
     if (existingOrder && isEditMode) {
       setPlatform(existingOrder.platform);
       setOrderNumberExternal(existingOrder.order_number_external);
+      setLabel((existingOrder as { label?: string | null }).label ?? '');
       setOrderDate(existingOrder.order_date.split('T')[0]);
       setProtectionEndDate(existingOrder.protection_end_date?.split('T')[0] || '');
-      setPriceOriginal(existingOrder.price_original.toString());
+      setShippingCost((existingOrder as { shipping_cost?: number }).shipping_cost != null ? String((existingOrder as { shipping_cost?: number }).shipping_cost) : '');
+      setCustomsCost((existingOrder as { customs_cost?: number }).customs_cost != null ? String((existingOrder as { customs_cost?: number }).customs_cost) : '');
       setCurrencyOriginal(existingOrder.currency_original);
       setExchangeRate(existingOrder.exchange_rate_frozen.toString());
       setComment(existingOrder.comment || '');
@@ -92,10 +105,16 @@ export function OrderForm() {
     }
   }, [isEditMode, id, existingOrder]);
 
+  const itemsTotal = newItems.reduce((s, i) => s + (parseFloat(i.price_per_item) || 0) * (i.quantity_ordered || 0), 0)
+    + existingItems.reduce((s, i) => s + (Number(i.price_per_item) || 0) * (i.quantity_ordered || 0), 0);
+  const shipping = parseFloat(shippingCost) || 0;
+  const customs = parseFloat(customsCost) || 0;
+  const priceOriginal = itemsTotal + shipping + customs;
+
   // Auto-fetch exchange rate
   useEffect(() => {
     const fetchRate = async () => {
-      if (!user || manualRate || !priceOriginal || !currencyOriginal) return;
+      if (!user || manualRate || !currencyOriginal) return;
       if (currencyOriginal === user.main_currency) {
         setExchangeRate('1.0');
         return;
@@ -113,9 +132,9 @@ export function OrderForm() {
       }
     };
     fetchRate();
-  }, [currencyOriginal, user, manualRate, priceOriginal]);
+  }, [currencyOriginal, user, manualRate]);
 
-  const priceFinalBase = parseFloat(((parseFloat(priceOriginal) || 0) * (parseFloat(exchangeRate) || 1)).toFixed(2));
+  const priceFinalBase = parseFloat((priceOriginal * (parseFloat(exchangeRate) || 1)).toFixed(2));
 
   const addNewItem = () => {
     if (!newItemName.trim()) return;
@@ -181,44 +200,43 @@ export function OrderForm() {
     setSubmitting(true);
     setError(null);
 
-    const orderData = {
+    const orderData: Record<string, unknown> = {
       platform,
       order_number_external: orderNumberExternal,
+      label: label.trim() || null,
       order_date: new Date(orderDate).toISOString(),
       protection_end_date: protectionEndDate ? new Date(protectionEndDate).toISOString() : null,
-      price_original: parseFloat(parseFloat(priceOriginal).toFixed(2)),
       currency_original: currencyOriginal,
       exchange_rate_frozen: manualRate && exchangeRate ? parseFloat(parseFloat(exchangeRate).toFixed(6)) : undefined,
       price_final_base: manualRate && exchangeRate ? parseFloat(priceFinalBase.toFixed(2)) : undefined,
       is_price_estimated: manualRate ? false : undefined,
       comment: comment || null,
+      shipping_cost: shipping > 0 ? parseFloat(shipping.toFixed(2)) : null,
+      customs_cost: customs > 0 ? parseFloat(customs.toFixed(2)) : null,
     };
 
     try {
       let result;
       if (isEditMode) {
-        result = await updateOrder(id, orderData);
+        result = await updateOrder(id, orderData as Parameters<typeof updateOrder>[1]);
       } else {
-        result = await createOrder(orderData);
+        if (newItems.length > 0) {
+          orderData.order_items = newItems.map((item) => ({
+            item_name: item.item_name,
+            quantity_ordered: item.quantity_ordered,
+            price_per_item: item.price_per_item ? parseFloat(item.price_per_item) : null,
+          }));
+        } else {
+          orderData.price_original = parseFloat(priceOriginal.toFixed(2));
+        }
+        result = await createOrder(orderData as Parameters<typeof createOrder>[0]);
       }
 
       if (result) {
-        // Create items for new order
-        if (!isEditMode && newItems.length > 0) {
-          for (const item of newItems) {
-            await createItem({
-              order_id: result.id,
-              item_name: item.item_name,
-              quantity_ordered: item.quantity_ordered,
-              price_per_item: item.price_per_item ? parseFloat(item.price_per_item) : undefined,
-            });
-          }
-        }
-        // Also create new items added in edit mode
         if (isEditMode && newItems.length > 0) {
           for (const item of newItems) {
             await createItem({
-              order_id: id,
+              order_id: id!,
               item_name: item.item_name,
               quantity_ordered: item.quantity_ordered,
               price_per_item: item.price_per_item ? parseFloat(item.price_per_item) : undefined,
@@ -253,23 +271,33 @@ export function OrderForm() {
 
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Platform */}
+          {/* Platform — из настроек (магазины) */}
           <div>
             <label htmlFor="platform" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Площадка *</label>
             <select id="platform" value={platform} onChange={(e) => setPlatform(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" required>
               <option value="">Выберите площадку</option>
-              <option value="AliExpress">AliExpress</option>
-              <option value="Ozon">Ozon</option>
-              <option value="Wildberries">Wildberries</option>
-              <option value="Amazon">Amazon</option>
-              <option value="Other">Другое</option>
+              {availableStores.map((s) => (
+                <option key={s.slug} value={s.slug}>{s.name !== s.slug ? `${s.slug} — ${s.name}` : s.slug}</option>
+              ))}
+              {availableStores.length === 0 && (
+                <option value="" disabled>Включите площадки в Настройках</option>
+              )}
             </select>
+            {availableStores.length === 0 && (
+              <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">Настройки → Магазины: включите площадки по умолчанию или добавьте свои</p>
+            )}
           </div>
 
           {/* Order Number */}
           <div>
             <label htmlFor="orderNumber" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Номер заказа *</label>
             <input type="text" id="orderNumber" value={orderNumberExternal} onChange={(e) => setOrderNumberExternal(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" required />
+          </div>
+
+          {/* Label — human-readable name */}
+          <div>
+            <label htmlFor="orderLabel" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Название заказа</label>
+            <input type="text" id="orderLabel" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Например: Куртка с Ozon" className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
           </div>
 
           {/* Dates */}
@@ -284,22 +312,29 @@ export function OrderForm() {
             </div>
           </div>
 
-          {/* Price and Currency */}
+          {/* Currency — только валюты, включённые в Настройках → Валюты и курсы */}
+          <div>
+            <label htmlFor="currency" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Валюта *</label>
+            <select id="currency" value={currencyOriginal} onChange={(e) => setCurrencyOriginal(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" required>
+              {visibleCurrencies.map((code) => (
+                <option key={code} value={code}>{CURRENCY_LABELS[code] ?? code}</option>
+              ))}
+              {visibleCurrencies.length === 0 && (
+                <option value="RUB">RUB (₽)</option>
+              )}
+            </select>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label htmlFor="price" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Стоимость *</label>
-              <input type="number" id="price" step="0.01" min="0" value={priceOriginal} onChange={(e) => setPriceOriginal(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" required />
+              <label htmlFor="shipping" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Доставка</label>
+              <input type="number" id="shipping" step="0.01" min="0" value={shippingCost} onChange={(e) => setShippingCost(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
             </div>
             <div>
-              <label htmlFor="currency" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Валюта *</label>
-              <select id="currency" value={currencyOriginal} onChange={(e) => setCurrencyOriginal(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" required>
-                <option value="RUB">RUB (₽)</option>
-                <option value="USD">USD ($)</option>
-                <option value="EUR">EUR (€)</option>
-                <option value="CNY">CNY (¥)</option>
-              </select>
+              <label htmlFor="customs" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Пошлины</label>
+              <input type="number" id="customs" step="0.01" min="0" value={customsCost} onChange={(e) => setCustomsCost(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
             </div>
           </div>
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Итого (товары + доставка + пошлины): {priceOriginal.toFixed(2)} {currencyOriginal}</p>
 
           {/* Exchange Rate */}
           {currencyOriginal && user && currencyOriginal !== user.main_currency && (

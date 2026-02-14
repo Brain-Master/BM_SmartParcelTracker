@@ -10,6 +10,7 @@ class ParcelBase(BaseModel):
     """Base parcel schema with common fields."""
     tracking_number: str = Field(..., max_length=128)
     carrier_slug: str = Field(..., max_length=64)
+    label: str | None = Field(None, max_length=128)
     status: ParcelStatus = ParcelStatus.Created
     tracking_updated_at: datetime | None = None
     weight_kg: Decimal | None = Field(None, ge=0, decimal_places=3)
@@ -17,24 +18,22 @@ class ParcelBase(BaseModel):
 
 class ParcelCreate(ParcelBase):
     """Schema for creating a new parcel."""
-    order_id: str | None = None
 
 
 class ParcelUpdate(BaseModel):
     """Schema for updating parcel. All fields are optional."""
     tracking_number: str | None = Field(None, max_length=128)
     carrier_slug: str | None = Field(None, max_length=64)
+    label: str | None = Field(None, max_length=128)
     status: ParcelStatus | None = None
     tracking_updated_at: datetime | None = None
     weight_kg: Decimal | None = Field(None, ge=0, decimal_places=3)
-    order_id: str | None = None
 
 
 class ParcelRead(ParcelBase):
     """Schema for reading parcel data (response)."""
     id: str
     user_id: str
-    order_id: str | None = None
     created_at: datetime
     updated_at: datetime
     
@@ -42,12 +41,12 @@ class ParcelRead(ParcelBase):
 
 
 class ParcelWithItems(ParcelRead):
-    """Parcel with related order items."""
-    order_items: list["OrderItemRead"] = []
-    
+    """Parcel with related order items. Items include order_deleted_at for UI (заказ удалён)."""
+    order_items: list["OrderItemReadWithOrderDeleted"] = []
+
     model_config = ConfigDict(from_attributes=True)
 
 
-# Forward reference for OrderItemRead
-from app.schemas.order_item import OrderItemRead  # noqa: E402
+# Forward reference
+from app.schemas.order_item import OrderItemReadWithOrderDeleted  # noqa: E402
 ParcelWithItems.model_rebuild()

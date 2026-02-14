@@ -5,6 +5,7 @@ import { Register } from './pages/Register'
 import { Profile } from './pages/Profile'
 import { OrderForm } from './pages/OrderForm'
 import { ParcelForm } from './pages/ParcelForm'
+import { SettingsPage } from './pages/SettingsPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AppLayout } from './components/AppLayout'
 
@@ -53,6 +54,13 @@ function App() {
           <ProtectedRoute>
             <AppLayout>
               <ParcelForm />
+            </AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/settings" element={
+          <ProtectedRoute>
+            <AppLayout>
+              <SettingsPage />
             </AppLayout>
           </ProtectedRoute>
         } />

@@ -158,7 +158,7 @@ async def test_create_order_auto_conversion(client: AsyncClient, auth_headers: d
         MockAsyncClient.return_value = mock_client
         
         # Clear currency cache
-        currency_service.clear_cache()
+        await currency_service.clear_cache()
         
         # Create order in USD (should auto-convert to RUB)
         response = await client.post(

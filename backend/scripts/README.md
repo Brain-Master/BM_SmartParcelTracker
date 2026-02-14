@@ -46,9 +46,19 @@ python scripts/seed_test_data.py
 
 **Note:** The script is idempotent - it checks if the test user already exists and won't create duplicates. However, it will create new orders/parcels each time you run it.
 
+### `clear_orders_parcels.py`
+
+Removes all orders, parcels, order_items, and parcel_items from the database. **Users are preserved.**
+
+**Usage:**
+```bash
+cd backend
+python scripts/clear_orders_parcels.py
+```
+
 ## Future Scripts
 
-- `clear_test_data.py` - Remove all test data
+- `clear_test_data.py` - Remove all test data (including users)
 - `create_admin.py` - Create admin user for production
 - `backup_db.py` - Backup database to file
 - `restore_db.py` - Restore database from backup

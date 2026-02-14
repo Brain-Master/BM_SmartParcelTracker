@@ -24,6 +24,7 @@ from app.models.user import User
 from app.models.order import Order
 from app.models.parcel import Parcel
 from app.models.order_item import OrderItem
+from app.models.parcel_item import ParcelItem
 from app.models.enums import MainCurrency, ParcelStatus, OrderItemStatus
 
 
@@ -107,7 +108,12 @@ async def create_test_data(session: AsyncSession, user: User):
         item_status=OrderItemStatus.Shipped
     )
     session.add_all([item1_1, item1_2])
-    
+    await session.flush()
+    session.add_all([
+        ParcelItem(parcel_id=parcel1.id, order_item_id=item1_1.id, quantity=1),
+        ParcelItem(parcel_id=parcel1.id, order_item_id=item1_2.id, quantity=2),
+    ])
+
     # ============ Scenario 2: Lost parcel (>30 days no update) ============
     order2 = Order(
         user_id=user.id,
@@ -146,7 +152,9 @@ async def create_test_data(session: AsyncSession, user: User):
         item_status=OrderItemStatus.Shipped
     )
     session.add(item2_1)
-    
+    await session.flush()
+    session.add(ParcelItem(parcel_id=parcel2.id, order_item_id=item2_1.id, quantity=3))
+
     # ============ Scenario 3: Action required - protection ending soon ============
     order3 = Order(
         user_id=user.id,
@@ -185,7 +193,9 @@ async def create_test_data(session: AsyncSession, user: User):
         item_status=OrderItemStatus.Shipped
     )
     session.add(item3_1)
-    
+    await session.flush()
+    session.add(ParcelItem(parcel_id=parcel3.id, order_item_id=item3_1.id, quantity=1))
+
     # ============ Scenario 4: Delivered but incomplete ============
     order4 = Order(
         user_id=user.id,
@@ -234,7 +244,12 @@ async def create_test_data(session: AsyncSession, user: User):
         item_status=OrderItemStatus.Received
     )
     session.add_all([item4_1, item4_2])
-    
+    await session.flush()
+    session.add_all([
+        ParcelItem(parcel_id=parcel4.id, order_item_id=item4_1.id, quantity=3),
+        ParcelItem(parcel_id=parcel4.id, order_item_id=item4_2.id, quantity=5),
+    ])
+
     # ============ Scenario 5: Pickup ready ============
     order5 = Order(
         user_id=user.id,
@@ -273,7 +288,9 @@ async def create_test_data(session: AsyncSession, user: User):
         item_status=OrderItemStatus.Shipped
     )
     session.add(item5_1)
-    
+    await session.flush()
+    session.add(ParcelItem(parcel_id=parcel5.id, order_item_id=item5_1.id, quantity=1))
+
     # ============ Scenario 6: USD order with currency conversion ============
     order6 = Order(
         user_id=user.id,
@@ -312,7 +329,9 @@ async def create_test_data(session: AsyncSession, user: User):
         item_status=OrderItemStatus.Shipped
     )
     session.add(item6_1)
-    
+    await session.flush()
+    session.add(ParcelItem(parcel_id=parcel6.id, order_item_id=item6_1.id, quantity=1))
+
     # ============ Scenario 7: Multiple items, various statuses ============
     order7 = Order(
         user_id=user.id,
@@ -371,8 +390,14 @@ async def create_test_data(session: AsyncSession, user: User):
         ),
     ]
     session.add_all(items7)
-    
-    print(f"[OK] Created 7 test orders with {sum([2, 1, 1, 2, 1, 1, 3])} items across 7 parcels")
+    await session.flush()
+    session.add_all([
+        ParcelItem(parcel_id=parcel7.id, order_item_id=items7[0].id, quantity=2),
+        ParcelItem(parcel_id=parcel7.id, order_item_id=items7[1].id, quantity=1),
+        ParcelItem(parcel_id=parcel7.id, order_item_id=items7[2].id, quantity=1),
+    ])
+
+    print("[OK] Created 7 test orders with 11 items (11 parcel_items) across 7 parcels")
 
 
 async def main():

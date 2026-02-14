@@ -19,6 +19,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { to: '/', label: 'Главная', icon: '📦' },
     { to: '/orders/new', label: 'Новый заказ', icon: '➕' },
     { to: '/parcels/new', label: 'Новая посылка', icon: '📮' },
+    { to: '/settings', label: 'Настройки', icon: '⚙️' },
     { to: '/profile', label: 'Профиль', icon: '👤' },
   ];
 

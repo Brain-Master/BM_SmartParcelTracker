@@ -44,9 +44,9 @@ async def create_parcel(db: AsyncSession, user_id: str, parcel_data: ParcelCreat
     """Create a new parcel."""
     parcel = Parcel(
         user_id=user_id,
-        order_id=parcel_data.order_id,
         tracking_number=parcel_data.tracking_number,
         carrier_slug=parcel_data.carrier_slug,
+        label=parcel_data.label,
         status=parcel_data.status,
         tracking_updated_at=parcel_data.tracking_updated_at,
         weight_kg=parcel_data.weight_kg

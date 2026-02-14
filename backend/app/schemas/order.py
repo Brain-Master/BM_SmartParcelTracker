@@ -3,11 +3,14 @@ from datetime import datetime
 from decimal import Decimal
 from pydantic import BaseModel, Field, ConfigDict
 
+from app.schemas.order_item import OrderItemCreateNested
+
 
 class OrderBase(BaseModel):
     """Base order schema with common fields."""
     platform: str = Field(..., max_length=64)
     order_number_external: str = Field(..., max_length=128)
+    label: str | None = Field(None, max_length=128)
     order_date: datetime
     protection_end_date: datetime | None = None
     price_original: Decimal = Field(..., ge=0, decimal_places=2)
@@ -21,12 +24,13 @@ class OrderBase(BaseModel):
 
 
 class OrderCreate(BaseModel):
-    """Schema for creating a new order. exchange_rate and price_final are optional (auto-calculated)."""
+    """Schema for creating a new order. exchange_rate and price_final are optional (auto-calculated). Optional order_items for create-in-one-request."""
     platform: str = Field(..., max_length=64)
     order_number_external: str = Field(..., max_length=128)
+    label: str | None = Field(None, max_length=128)
     order_date: datetime
     protection_end_date: datetime | None = None
-    price_original: Decimal = Field(..., ge=0, decimal_places=2)
+    price_original: Decimal | None = Field(None, ge=0, decimal_places=2)
     currency_original: str = Field(..., max_length=3)
     exchange_rate_frozen: Decimal | None = Field(None, gt=0, decimal_places=6)
     price_final_base: Decimal | None = Field(None, ge=0, decimal_places=2)
@@ -34,12 +38,14 @@ class OrderCreate(BaseModel):
     comment: str | None = None
     shipping_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
     customs_cost: Decimal | None = Field(None, ge=0, decimal_places=2)
+    order_items: list[OrderItemCreateNested] = Field(default_factory=list)
 
 
 class OrderUpdate(BaseModel):
     """Schema for updating order. All fields are optional."""
     platform: str | None = Field(None, max_length=64)
     order_number_external: str | None = Field(None, max_length=128)
+    label: str | None = Field(None, max_length=128)
     order_date: datetime | None = None
     protection_end_date: datetime | None = None
     price_original: Decimal | None = Field(None, ge=0, decimal_places=2)

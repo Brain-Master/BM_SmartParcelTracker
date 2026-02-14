@@ -11,11 +11,32 @@ export type ParcelStatus =
   | 'Archived'
 
 export type OrderItemStatus =
-  | 'Waiting_Shipment'
+  | 'Waiting_Payment'
+  | 'Payment_Verification'
+  | 'Seller_Packing'
+  | 'Partially_Shipped'
   | 'Shipped'
+  | 'Partially_Received'
   | 'Received'
+  | 'Cancelled'
   | 'Dispute_Open'
   | 'Refunded'
+  | 'Waiting_Shipment'
+
+/** Plan §6: RU labels for order item statuses */
+export const ORDER_ITEM_STATUS_LABELS: Record<OrderItemStatus, string> = {
+  Waiting_Payment: 'Ждёт оплаты',
+  Payment_Verification: 'Проверка платежа',
+  Seller_Packing: 'Сборка продавцом',
+  Partially_Shipped: 'Частично отправлено',
+  Shipped: 'Отправлено',
+  Partially_Received: 'Частично получено',
+  Received: 'Получено',
+  Cancelled: 'Отменено',
+  Dispute_Open: 'Dispute открыт',
+  Refunded: 'Возврат',
+  Waiting_Shipment: 'Сборка продавцом',
+}
 
 export interface User {
   id: string
@@ -28,6 +49,7 @@ export interface Order {
   user_id: string
   platform: string
   order_number_external: string
+  label?: string | null
   order_date: string
   protection_end_date: string | null
   price_original: number
@@ -36,14 +58,18 @@ export interface Order {
   price_final_base: number
   is_price_estimated: boolean
   comment: string | null
+  shipping_cost?: number | null
+  customs_cost?: number | null
+  /** Set when order is soft-deleted (variant C: shared parcels). */
+  deleted_at?: string | null
 }
 
 export interface Parcel {
   id: string
   user_id: string
-  order_id: string | null
   tracking_number: string
   carrier_slug: string
+  label?: string | null
   status: ParcelStatus
   tracking_updated_at: string | null
   weight_kg: number | null
@@ -70,6 +96,8 @@ export interface OrderItem {
   in_parcels?: OrderItemInParcel[]
   quantity_in_parcels?: number
   remaining_quantity?: number
+  /** Set when parcel is loaded with items and this item's order is soft-deleted (заказ удалён). */
+  order_deleted_at?: string | null
 }
 
 /** ParcelItem API: order item in a parcel with quantity. */

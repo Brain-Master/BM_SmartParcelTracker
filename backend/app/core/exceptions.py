@@ -12,10 +12,10 @@ class NotFoundException(HTTPException):
 
 
 class AlreadyExistsException(HTTPException):
-    """Raised when trying to create a resource that already exists."""
+    """Raised when trying to create/update a resource that would duplicate a unique field (409 Conflict)."""
     def __init__(self, resource: str, field: str, value: str):
         super().__init__(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail=f"{resource} with {field} '{value}' already exists"
         )
 
@@ -34,5 +34,14 @@ class ValidationException(HTTPException):
     def __init__(self, detail: str):
         super().__init__(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=detail
+        )
+
+
+class ConflictException(HTTPException):
+    """Raised when operation conflicts with existing data (e.g. delete forbidden)."""
+    def __init__(self, detail: str):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
             detail=detail
         )

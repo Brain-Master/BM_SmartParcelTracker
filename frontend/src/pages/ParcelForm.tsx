@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useParcels } from '../hooks/useParcels';
 import { useOrders } from '../hooks/useOrders';
 import { useParcelItems } from '../hooks/useParcelItems';
+import { useCarriers } from '../hooks/useCarriers';
+import { getAvailableCarriersForForm } from '../utils/defaultCarriers';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import type { ParcelStatus, OrderItem } from '../types';
 
@@ -13,6 +15,8 @@ export function ParcelForm() {
   const { id } = useParams<{ id: string }>();
   const { parcels, createParcel, updateParcel, loading } = useParcels();
   const { orders } = useOrders(true);
+  const { carriers } = useCarriers();
+  const availableCarriers = getAvailableCarriersForForm(carriers);
   const { list: listParcelItems, create: createParcelItem, update: updateParcelItem, remove: removeParcelItem, error: parcelItemsError } = useParcelItems();
 
   const isEditMode = !!id;
@@ -20,9 +24,9 @@ export function ParcelForm() {
 
   const [trackingNumber, setTrackingNumber] = useState('');
   const [carrierSlug, setCarrierSlug] = useState('');
+  const [label, setLabel] = useState('');
   const [status, setStatus] = useState<ParcelStatus>('Created');
   const [weightKg, setWeightKg] = useState('');
-  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
 
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [itemQuantities, setItemQuantities] = useState<Map<string, number>>(new Map());
@@ -36,11 +40,10 @@ export function ParcelForm() {
     const items: (OrderItem & { orderPlatform: string; orderNumber: string })[] = [];
     const orderList = orders as OrderWithItems[];
     for (const order of orderList) {
-      if (selectedOrderId && order.id !== selectedOrderId) continue;
       const orderItems = order.order_items ?? [];
       for (const raw of orderItems) {
         const remaining = raw.remaining_quantity ?? (raw.quantity_ordered - (raw.quantity_in_parcels ?? 0));
-        const inThisParcel = isEditMode && id && (raw.in_parcels?.some(p => p.parcel_id === id) ?? false);
+        const inThisParcel = isEditMode && id && ((raw.in_parcels?.some(p => p.parcel_id === id) || raw.parcel_id === id) ?? false);
         if (remaining > 0 || inThisParcel) {
           items.push({
             ...raw,
@@ -51,7 +54,7 @@ export function ParcelForm() {
       }
     }
     return items;
-  }, [orders, selectedOrderId, isEditMode, id]);
+  }, [orders, isEditMode, id]);
 
   // Load existing parcel items when editing
   useEffect(() => {
@@ -73,9 +76,9 @@ export function ParcelForm() {
     if (existingParcel && isEditMode) {
       setTrackingNumber(existingParcel.tracking_number);
       setCarrierSlug(existingParcel.carrier_slug);
+      setLabel((existingParcel as { label?: string | null }).label ?? '');
       setStatus(existingParcel.status);
       setWeightKg(existingParcel.weight_kg?.toString() || '');
-      setSelectedOrderId(existingParcel.order_id || '');
     }
   }, [existingParcel, isEditMode]);
 
@@ -92,8 +95,14 @@ export function ParcelForm() {
     setItemQuantities(quantities);
   }, [isEditMode, id, currentParcelItems]);
 
-  const quantityInThisParcel = (item: OrderItem): number =>
-    Number((id && item.in_parcels?.find(p => p.parcel_id === id)?.quantity) ?? 0);
+  const quantityInThisParcel = (item: OrderItem): number => {
+    const fromParcelItems = currentParcelItems.get(item.id)?.quantity;
+    if (typeof fromParcelItems === 'number') return fromParcelItems;
+    const fromInParcels = id ? item.in_parcels?.find(p => p.parcel_id === id)?.quantity : undefined;
+    if (typeof fromInParcels === 'number') return fromInParcels;
+    if (id && item.parcel_id === id) return item.quantity_ordered;
+    return 0;
+  };
 
   const maxQuantityForItem = (item: OrderItem) => {
     const remaining = Number(item.remaining_quantity ?? item.quantity_ordered);
@@ -130,9 +139,9 @@ export function ParcelForm() {
     const parcelData = {
       tracking_number: trackingNumber,
       carrier_slug: carrierSlug,
+      label: label.trim() || null,
       status,
       weight_kg: weightKg ? parseFloat(weightKg) : null,
-      order_id: selectedOrderId || null,
     };
 
     try {
@@ -217,17 +226,25 @@ export function ParcelForm() {
           </div>
 
           <div>
+            <label htmlFor="parcelLabel" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Название посылки</label>
+            <input type="text" id="parcelLabel" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Например: Куртка DHL" className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" />
+          </div>
+
+          {/* Перевозчик — из настроек (службы доставки) */}
+          <div>
             <label htmlFor="carrier" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Перевозчик *</label>
             <select id="carrier" value={carrierSlug} onChange={(e) => setCarrierSlug(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" required>
               <option value="">Выберите</option>
-              <option value="cdek">CDEK</option>
-              <option value="russian-post">Почта России</option>
-              <option value="usps">USPS</option>
-              <option value="dhl">DHL</option>
-              <option value="fedex">FedEx</option>
-              <option value="china-post">China Post</option>
-              <option value="other">Другое</option>
+              {availableCarriers.map((c) => (
+                <option key={c.slug} value={c.slug}>{c.name !== c.slug ? `${c.slug} — ${c.name}` : c.slug}</option>
+              ))}
+              {availableCarriers.length === 0 && (
+                <option value="" disabled>Включите службы в Настройках</option>
+              )}
             </select>
+            {availableCarriers.length === 0 && (
+              <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">Настройки → Службы доставки: включите службы по умолчанию или добавьте свои</p>
+            )}
           </div>
 
           <div>
@@ -245,16 +262,6 @@ export function ParcelForm() {
           <div>
             <label htmlFor="weight" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Вес (кг)</label>
             <input type="number" id="weight" step="0.01" min="0" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100" placeholder="Опционально" />
-          </div>
-
-          <div>
-            <label htmlFor="orderId" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Привязать к заказу</label>
-            <select id="orderId" value={selectedOrderId} onChange={(e) => setSelectedOrderId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-100">
-              <option value="">Без привязки к заказу</option>
-              {orders.map(o => (
-                <option key={o.id} value={o.id}>{o.platform} — #{o.order_number_external}</option>
-              ))}
-            </select>
           </div>
 
           {availableItems.length > 0 && (
