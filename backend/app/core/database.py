@@ -4,12 +4,15 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
-from app.models.base import Base
 
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
     future=True,
+    pool_size=20,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_pre_ping=True,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -22,6 +25,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """Dependency for database sessions. Use in FastAPI endpoints with Depends(get_db)."""
     async with AsyncSessionLocal() as session:
         try:
             yield session
@@ -31,8 +35,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
-
-
-async def init_db() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)

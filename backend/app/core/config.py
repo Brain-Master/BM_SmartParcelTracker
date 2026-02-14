@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
     cbr_api_url: str = "https://www.cbr-xml-daily.ru/daily_json.js"
+    
+    # JWT Authentication
+    SECRET_KEY: str = Field(
+        default="CHANGE_THIS_IN_PRODUCTION_USE_openssl_rand_hex_32",
+        description="Secret key for JWT token encoding. MUST be changed in production."
+    )
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     # Backward compatibility
     @property

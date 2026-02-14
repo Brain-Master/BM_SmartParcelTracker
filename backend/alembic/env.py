@@ -1,4 +1,5 @@
 """Alembic env. Uses sync engine for migrations."""
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -16,18 +17,22 @@ target_metadata = Base.metadata
 
 
 def get_url():
-    # Prefer DATABASE_URL_SYNC for migrations (postgresql://), else derive from async
-    url = config.get_main_option("sqlalchemy.url")
-    if url is None:
-        raise RuntimeError(
-            "Alembic sqlalchemy.url is not set. "
-            "Configure it in alembic.ini [alembic] section or set the ALEMBIC_DATABASE_URL environment variable."
-        )
-    url = url.strip()
+    # Read from environment variable DATABASE_URL
+    url = os.getenv("DATABASE_URL")
+    
     if not url:
+        # Fallback to alembic.ini if set
+        url = config.get_main_option("sqlalchemy.url")
+    
+    if url is None or not url.strip():
         raise RuntimeError(
-            "Alembic sqlalchemy.url is empty. Set sqlalchemy.url in alembic.ini [alembic] section."
+            "DATABASE_URL environment variable is not set. "
+            "Set DATABASE_URL before running alembic commands."
         )
+    
+    url = url.strip()
+    
+    # Convert async URL to sync for alembic
     if url.startswith("postgresql+asyncpg"):
         return url.replace("postgresql+asyncpg", "postgresql", 1)
     return url

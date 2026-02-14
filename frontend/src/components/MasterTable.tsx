@@ -64,6 +64,14 @@ export function MasterTable({ rows }: { rows: ParcelRow[] }) {
             <button
               type="button"
               onClick={() => row.toggleExpanded()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  row.toggleExpanded()
+                }
+              }}
+              aria-expanded={row.getIsExpanded()}
+              aria-label={row.getIsExpanded() ? 'Свернуть товары' : 'Развернуть товары'}
               className="px-2 font-mono"
             >
               {row.getIsExpanded() ? '−' : '+'}
@@ -147,12 +155,16 @@ export function MasterTable({ rows }: { rows: ParcelRow[] }) {
         <span className="font-medium">Заказы и посылки</span>
         <button
           type="button"
+          aria-label="Скачать данные в формате CSV"
           className="rounded bg-slate-700 px-3 py-1.5 text-sm text-white hover:bg-slate-600 dark:bg-slate-600 dark:hover:bg-slate-500"
         >
           Скачать CSV
         </button>
       </div>
-      <table className="w-full text-left text-sm">
+      <table 
+        className="w-full text-left text-sm"
+        aria-label="Таблица заказов и посылок"
+      >
         <thead>
           {table.getHeaderGroups().map((hg) => (
             <tr key={hg.id} className="border-b border-slate-200 dark:border-slate-700">

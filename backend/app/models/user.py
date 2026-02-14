@@ -16,6 +16,7 @@ class User(Base, TimestampMixin):
         default=gen_uuid,
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     main_currency: Mapped[MainCurrency] = mapped_column(
         default=MainCurrency.RUB,
         nullable=False,

@@ -1,13 +1,15 @@
 # BM Smart Parcel Tracker — Local dev: App + PostgreSQL 16 + Redis
 # Usage: docker compose up -d
 # Then: backend at http://localhost:8000, run frontend locally (npm run dev) or add frontend service later
+# WARNING: This configuration is for LOCAL DEVELOPMENT ONLY. 
+# Use strong passwords and secrets management in production.
 
 services:
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: postgres  # Change in production!
       POSTGRES_DB: smart_parcel
     ports:
       - "5432:5432"

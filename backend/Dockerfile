@@ -33,9 +33,8 @@ RUN chown -R appuser:appgroup /app
 # Switch to non-root user
 USER appuser
 
-# Default Env Vars (can be overridden)
-ENV DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/smart_parcel
-ENV REDIS_URL=redis://redis:6379/0
+# Environment variables must be provided at runtime via docker-compose or deployment config
+# DATABASE_URL and REDIS_URL are required
 
 EXPOSE 8000
 

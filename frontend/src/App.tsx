@@ -1,6 +1,5 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { DesktopDashboard } from './pages/DesktopDashboard'
-import './index.css'
 
 function App() {
   return (
