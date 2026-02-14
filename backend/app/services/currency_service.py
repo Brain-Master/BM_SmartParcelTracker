@@ -1,4 +1,5 @@
 """Currency exchange rate service using CBR API."""
+import asyncio
 import httpx
 from datetime import datetime, timedelta
 from typing import Dict, Tuple
@@ -8,6 +9,7 @@ from app.core.config import settings
 # Simple in-memory cache: {(from_curr, to_curr): (rate, timestamp)}
 _rate_cache: Dict[Tuple[str, str], Tuple[float, datetime]] = {}
 _cache_ttl = timedelta(hours=1)
+_cache_lock = asyncio.Lock()  # Protect cache from concurrent access
 
 
 async def get_exchange_rate(
@@ -39,10 +41,11 @@ async def get_exchange_rate(
     
     # Check cache first (ignore date for caching)
     cache_key = (from_currency, to_currency)
-    if cache_key in _rate_cache:
-        rate, timestamp = _rate_cache[cache_key]
-        if datetime.now() - timestamp < _cache_ttl:
-            return rate
+    async with _cache_lock:
+        if cache_key in _rate_cache:
+            rate, timestamp = _rate_cache[cache_key]
+            if datetime.now() - timestamp < _cache_ttl:
+                return rate
     
     # Fetch from CBR API
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -91,11 +94,13 @@ async def get_exchange_rate(
         rate = from_value / to_value
     
     # Cache the result
-    _rate_cache[cache_key] = (rate, datetime.now())
+    async with _cache_lock:
+        _rate_cache[cache_key] = (rate, datetime.now())
     
     return rate
 
 
-def clear_cache():
+async def clear_cache():
     """Clear the exchange rate cache. Useful for testing."""
-    _rate_cache.clear()
+    async with _cache_lock:
+        _rate_cache.clear()
