@@ -48,5 +48,5 @@ async def delete_carrier(db: AsyncSession, carrier_id: str) -> None:
         raise ConflictException(
             "Удалить нельзя: есть посылки с этой службой доставки."
         )
-    await db.delete(carrier)
+    db.delete(carrier)
     await db.commit()

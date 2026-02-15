@@ -170,7 +170,7 @@ export function MasterTable({ rows }: { rows: ParcelRow[] }) {
         </button>
       </div>
       <table 
-        className="w-full text-left text-sm"
+        className="w-full text-center text-sm"
         aria-label="Таблица заказов и посылок"
       >
         <thead>
@@ -179,7 +179,7 @@ export function MasterTable({ rows }: { rows: ParcelRow[] }) {
               {hg.headers.map((h) => (
                 <th
                   key={h.id}
-                  className="px-4 py-2 font-medium text-slate-600 dark:text-slate-400"
+                  className="px-4 py-2 font-medium text-center text-slate-600 dark:text-slate-400"
                 >
                   {typeof h.column.columnDef.header === 'string'
                     ? h.column.columnDef.header
@@ -196,7 +196,7 @@ export function MasterTable({ rows }: { rows: ParcelRow[] }) {
               className="border-b border-slate-100 dark:border-slate-800"
             >
               {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="px-4 py-2">
+                <td key={cell.id} className="px-4 py-2 text-center">
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </td>
               ))}

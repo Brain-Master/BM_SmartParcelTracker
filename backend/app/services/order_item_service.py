@@ -73,7 +73,7 @@ async def update_order_item(
 async def delete_order_item(db: AsyncSession, item_id: str) -> None:
     """Delete order item."""
     item = await get_order_item_by_id(db, item_id)
-    await db.delete(item)
+    db.delete(item)
     await db.commit()
 
 

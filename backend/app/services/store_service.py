@@ -48,5 +48,5 @@ async def delete_store(db: AsyncSession, store_id: str) -> None:
         raise ConflictException(
             "Удалить нельзя: есть заказы, привязанные к этому магазину."
         )
-    await db.delete(store)
+    db.delete(store)
     await db.commit()

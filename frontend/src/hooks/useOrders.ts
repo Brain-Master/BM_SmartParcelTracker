@@ -6,7 +6,11 @@ interface OrderWithItems extends Order {
   order_items?: OrderItem[];
 }
 
-export function useOrders(includeItems: boolean = false, includeArchived: boolean = false) {
+export function useOrders(
+  includeItems: boolean = false,
+  includeArchived: boolean = false,
+  archivedOnly: boolean = false
+) {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +21,12 @@ export function useOrders(includeItems: boolean = false, includeArchived: boolea
     try {
       const params = new URLSearchParams();
       if (includeItems) params.set('include_items', 'true');
-      if (includeArchived) params.set('include_archived', 'true');
+      if (archivedOnly) {
+        params.set('include_archived', 'true');
+        params.set('archived_only', 'true');
+      } else if (includeArchived) {
+        params.set('include_archived', 'true');
+      }
       const query = params.toString() ? `?${params.toString()}` : '';
       const data = await apiClient.get<OrderWithItems[]>(`/orders/${query}`);
       setOrders(data);
@@ -31,7 +40,7 @@ export function useOrders(includeItems: boolean = false, includeArchived: boolea
   useEffect(() => {
     fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [includeItems, includeArchived]);
+  }, [includeItems, includeArchived, archivedOnly]);
 
   const createOrder = async (orderData: Partial<Order>): Promise<Order | null> => {
     try {
@@ -77,6 +86,17 @@ export function useOrders(includeItems: boolean = false, includeArchived: boolea
     }
   };
 
+  const unarchiveOrder = async (id: string): Promise<boolean> => {
+    try {
+      const updated = await apiClient.put<Order>(`/orders/${id}`, { is_archived: false });
+      setOrders(orders.map(o => (o.id === id ? { ...o, ...updated } : o)));
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to unarchive order');
+      return false;
+    }
+  };
+
   return {
     orders,
     loading,
@@ -86,5 +106,6 @@ export function useOrders(includeItems: boolean = false, includeArchived: boolea
     updateOrder,
     deleteOrder,
     archiveOrder,
+    unarchiveOrder,
   };
 }

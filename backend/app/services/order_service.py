@@ -184,6 +184,34 @@ async def _archive_exclusive_parcels_for_order(db: AsyncSession, order_id: str) 
     await db.flush()
 
 
+async def _unarchive_exclusive_parcels_for_order(db: AsyncSession, order_id: str) -> None:
+    """Set is_archived=False on parcels that contain only items from this order."""
+    order = await get_order_by_id(db, order_id, load_items=True)
+    our_item_ids = {item.id for item in order.order_items}
+    if not our_item_ids:
+        return
+    q_parcel_ids = (
+        select(ParcelItem.parcel_id)
+        .where(ParcelItem.order_item_id.in_(our_item_ids))
+        .distinct()
+    )
+    r = await db.execute(q_parcel_ids)
+    for (pid,) in r.all():
+        q_order_ids = (
+            select(OrderItem.order_id)
+            .join(ParcelItem, ParcelItem.order_item_id == OrderItem.id)
+            .where(ParcelItem.parcel_id == pid)
+            .distinct()
+        )
+        r2 = await db.execute(q_order_ids)
+        order_ids_in_parcel = {row[0] for row in r2.all()}
+        if order_ids_in_parcel == {order_id}:
+            parcel = await db.get(Parcel, pid)
+            if parcel:
+                parcel.is_archived = False
+    await db.flush()
+
+
 async def update_order(
     db: AsyncSession, 
     order_id: str, 
@@ -201,6 +229,8 @@ async def update_order(
     await db.flush()
     if update_data.get("is_archived") is True:
         await _archive_exclusive_parcels_for_order(db, order_id)
+    elif update_data.get("is_archived") is False:
+        await _unarchive_exclusive_parcels_for_order(db, order_id)
     await recalculate_order_totals(db, order_id)
     await db.refresh(order)
     return order
@@ -220,7 +250,7 @@ async def delete_order(db: AsyncSession, order_id: str, user_id: str) -> None:
 
     our_item_ids = {item.id for item in order.order_items}
     if not our_item_ids:
-        await db.delete(order)
+        db.delete(order)
         await db.commit()
         return
 
@@ -250,7 +280,7 @@ async def delete_order(db: AsyncSession, order_id: str, user_id: str) -> None:
     for pid in exclusive_parcel_ids:
         parcel = await db.get(Parcel, pid)
         if parcel:
-            await db.delete(parcel)
+            db.delete(parcel)
 
     await db.flush()
 
@@ -265,5 +295,5 @@ async def delete_order(db: AsyncSession, order_id: str, user_id: str) -> None:
         order.deleted_at = datetime.now(UTC)
         await db.commit()
     else:
-        await db.delete(order)
+        db.delete(order)
         await db.commit()

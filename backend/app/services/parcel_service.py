@@ -28,10 +28,13 @@ async def get_user_parcels(
     limit: int = 100,
     load_items: bool = False,
     include_archived: bool = False,
+    archived_only: bool = False,
 ) -> list[Parcel]:
     """Get all parcels for a user. By default excludes archived."""
     query = select(Parcel).where(Parcel.user_id == user_id)
-    if not include_archived:
+    if archived_only:
+        query = query.where(Parcel.is_archived.is_(True))
+    elif not include_archived:
         query = query.where(Parcel.is_archived.is_(False))
     if load_items:
         query = query.options(selectinload(Parcel.order_items))
@@ -93,5 +96,5 @@ async def delete_parcel(db: AsyncSession, parcel_id: str, user_id: str) -> None:
         from app.core.exceptions import UnauthorizedException
         raise UnauthorizedException("You can only delete your own parcels")
     
-    await db.delete(parcel)
+    db.delete(parcel)
     await db.commit()

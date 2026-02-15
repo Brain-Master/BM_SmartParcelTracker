@@ -52,6 +52,10 @@ class ApiClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        this.setToken(null);
+        window.location.href = '/login';
+      }
       const error: ApiError = await response.json().catch(() => ({
         detail: `HTTP ${response.status}: ${response.statusText}`,
       }));

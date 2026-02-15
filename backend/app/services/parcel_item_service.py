@@ -136,5 +136,5 @@ async def delete_parcel_item(db: AsyncSession, parcel_item_id: str, user_id: str
     parcel = await get_parcel_by_id(db, parcel_item.parcel_id)
     if parcel.user_id != user_id:
         raise UnauthorizedException("You can only remove items from your own parcels")
-    await db.delete(parcel_item)
+    db.delete(parcel_item)
     await db.commit()

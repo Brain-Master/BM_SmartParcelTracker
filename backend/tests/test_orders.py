@@ -127,3 +127,21 @@ async def test_list_orders_include_archived(client: AsyncClient, test_user_data,
     data = response.json()
     assert len(data) == 1
     assert data[0]["is_archived"] is True
+
+
+@pytest.mark.asyncio
+async def test_list_orders_archived_only(client: AsyncClient, test_user_data, test_order_data):
+    """With archived_only=true only archived orders are returned."""
+    headers = await get_auth_headers(client, test_user_data)
+    r1 = await client.post("/api/orders/", json=test_order_data, headers=headers)
+    order_id_1 = r1.json()["id"]
+    other = {**test_order_data, "order_number_external": "other-123"}
+    r2 = await client.post("/api/orders/", json=other, headers=headers)
+    order_id_2 = r2.json()["id"]
+    await client.put(f"/api/orders/{order_id_1}", json={"is_archived": True}, headers=headers)
+    response = await client.get("/api/orders/?include_archived=true&archived_only=true", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["id"] == order_id_1
+    assert data[0]["is_archived"] is True

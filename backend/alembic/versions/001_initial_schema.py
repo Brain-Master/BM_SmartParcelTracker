@@ -19,21 +19,23 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create enum types
-    maincurrency = postgresql.ENUM('RUB', 'USD', 'EUR', name='maincurrency')
-    maincurrency.create(op.get_bind())
+    # Create enum types explicitly (checkfirst=True for idempotent reset/rerun).
+    # create_type=False so create_table() does not try to create them again.
+    bind = op.get_bind()
+    maincurrency = postgresql.ENUM('RUB', 'USD', 'EUR', name='maincurrency', create_type=False)
+    maincurrency.create(bind, checkfirst=True)
     
     parcelstatus = postgresql.ENUM(
         'Created', 'In_Transit', 'PickUp_Ready', 'Delivered', 'Lost', 'Archived',
-        name='parcelstatus'
+        name='parcelstatus', create_type=False
     )
-    parcelstatus.create(op.get_bind())
+    parcelstatus.create(bind, checkfirst=True)
     
     orderitemstatus = postgresql.ENUM(
         'Waiting_Shipment', 'Shipped', 'Received', 'Dispute_Open', 'Refunded',
-        name='orderitemstatus'
+        name='orderitemstatus', create_type=False
     )
-    orderitemstatus.create(op.get_bind())
+    orderitemstatus.create(bind, checkfirst=True)
     
     # Create users table
     op.create_table(
@@ -61,7 +63,7 @@ def upgrade() -> None:
         sa.Column('currency_original', sa.String(length=3), nullable=False),
         sa.Column('exchange_rate_frozen', postgresql.NUMERIC(precision=12, scale=6), nullable=False),
         sa.Column('price_final_base', postgresql.NUMERIC(precision=14, scale=2), nullable=False),
-        sa.Column('is_price_estimated', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('is_price_estimated', sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column('comment', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),

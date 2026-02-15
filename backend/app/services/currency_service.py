@@ -1,7 +1,7 @@
 """Currency exchange rate service using CBR API."""
 import asyncio
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Dict, Tuple
 from app.core.config import settings
 
@@ -44,7 +44,7 @@ async def get_exchange_rate(
     async with _cache_lock:
         if cache_key in _rate_cache:
             rate, timestamp = _rate_cache[cache_key]
-            if datetime.now() - timestamp < _cache_ttl:
+            if datetime.now(UTC) - timestamp < _cache_ttl:
                 return rate
     
     # Fetch from CBR API
@@ -95,7 +95,7 @@ async def get_exchange_rate(
     
     # Cache the result
     async with _cache_lock:
-        _rate_cache[cache_key] = (rate, datetime.now())
+        _rate_cache[cache_key] = (rate, datetime.now(UTC))
     
     return rate
 
