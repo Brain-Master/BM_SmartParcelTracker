@@ -6,6 +6,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { ErrorMessage } from '../components/ErrorMessage'
+import { BarcodeScannerModal } from '../components/BarcodeScannerModal'
 import { useParcels } from '../hooks/useParcels'
 import { useOrders } from '../hooks/useOrders'
 import { useCurrentUser } from '../hooks/useUsers'
@@ -148,6 +149,7 @@ export function DesktopDashboard() {
   const [unarchivingOrderId, setUnarchivingOrderId] = useState<string | null>(null)
   const [unarchivingParcelId, setUnarchivingParcelId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [scannerOpen, setScannerOpen] = useState(false)
   const [filterPlatforms, setFilterPlatforms] = useState<string[]>([])
   const [filterCarriers, setFilterCarriers] = useState<string[]>([])
   const [filterParcelStatuses, setFilterParcelStatuses] = useState<ParcelStatus[]>([])
@@ -754,6 +756,11 @@ export function DesktopDashboard() {
         </div>
       )}
 
+      <BarcodeScannerModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScanned={(text) => { setSearchQuery(text); setScannerOpen(false) }}
+      />
       {loading && <LoadingSpinner />}
       {!loading && error && <ErrorMessage message={error} onRetry={handleRetry} />}
 
@@ -762,14 +769,25 @@ export function DesktopDashboard() {
           {/* Search, presets, filters, sort */}
           <div className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/80 px-4 py-3 space-y-3">
             <div className="flex flex-wrap items-center gap-3">
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Поиск: номер заказа, магазин, название, трек, товар..."
-                className="flex-1 min-w-[200px] px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                aria-label="Поиск по заказам и посылкам"
-              />
+              <div className="flex-1 min-w-[200px] flex items-center gap-2">
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Поиск: номер заказа, магазин, название, трек, товар..."
+                  className="flex-1 min-w-0 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  aria-label="Поиск по заказам и посылкам"
+                />
+                <button
+                  type="button"
+                  onClick={() => setScannerOpen(true)}
+                  className="shrink-0 p-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 focus:ring-2 focus:ring-blue-500"
+                  title="Сканировать QR или штрихкод (трек-номер)"
+                  aria-label="Сканировать QR или штрихкод"
+                >
+                  📷
+                </button>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
